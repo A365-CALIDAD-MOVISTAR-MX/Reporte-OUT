@@ -122,6 +122,7 @@ function pill(x){return x==null?'<span class="muted">–</span>':'<span class="p
 function uniq(a){var o={};a.forEach(function(x){if(x)o[x]=1;});return Object.keys(o).sort();}
 function groupBy(a,fn){var o={};a.forEach(function(x){var k=fn(x);(o[k]||(o[k]=[])).push(x);});return o;}
 function mesLabel(m){return m?MESES[+m.slice(5,7)-1]+' '+m.slice(0,4):'';}
+function mesActual(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);}
 function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 function fdate(s){return s?s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';}
 function count(a,fn){var o={};a.forEach(function(x){var k=fn(x);if(k)o[k]=(o[k]||0)+1;});return Object.keys(o).map(function(k){return [k,o[k]];}).sort(function(a,b){return b[1]-a[1];});}
@@ -138,7 +139,7 @@ function cargar(forzar){
   call(forzar?'refrescar':'getData').then(function(txt){
     D=JSON.parse(txt);
     var meses=uniq(D.eva.map(function(e){return e.mes;}).concat(D.fb.map(function(f){return f.mes;})));
-    if(!F.mes&&meses.length)F.mes=meses[meses.length-1];
+    if(!F.mes)F.mes=mesActual();
     var faltan=[];if(!D.hojas.eva)faltan.push('evaluaciones');if(!D.hojas.fb)faltan.push('feedback');
     document.getElementById('upd').innerHTML='Actualizado '+esc(D.actualizado)+' · '+D.eva.length+' evaluaciones · '+D.fb.length+' feedbacks'+(faltan.length?' · <span class="miss">No se encontró la hoja de '+faltan.join(' y ')+'</span>':'');
     if(CLAVE)cargarMon(CLAVE,true);
@@ -161,7 +162,7 @@ function resumen(a){
 /* ===== UI base ===== */
 function pintarFiltros(){
   var e=D.eva, f=D.fb;
-  var defs=[['mes','Mes',uniq(e.map(function(x){return x.mes;}).concat(f.map(function(x){return x.mes;}))).reverse(),mesLabel],
+  var defs=[['mes','Mes',uniq(e.map(function(x){return x.mes;}).concat(f.map(function(x){return x.mes;}),[mesActual()])).reverse(),mesLabel],
     ['sem','Semana',['1','2','3','4','5'],function(s){return 'Semana '+s;}],
     ['campana','Campaña',uniq(e.map(function(x){return x.campana;}))],
     ['supervisor','Supervisor',uniq(e.map(function(x){return x.supervisor;}))],
@@ -385,7 +386,7 @@ function cargarMon(clave,silencioso){
   return call('getMonitoreo',clave).then(function(txt){
     var r=JSON.parse(txt);
     if(!r.ok){CLAVE=null;MON=null;if(err)err.textContent=r.error;return;}
-    CLAVE=clave;MON=r.data;if(!FM.mes)FM.mes=MON.meses[MON.meses.length-1]||'';
+    CLAVE=clave;MON=r.data;if(!FM.mes)FM.mes=mesActual();if(MON.meses.indexOf(mesActual())<0)MON.meses.push(mesActual());
     if(TAB==='monitoreo'&&!silencioso)render();else if(TAB==='monitoreo')render();
   }).catch(function(e){if(err)err.textContent=e&&e.message||String(e);});
 }
