@@ -10,9 +10,12 @@ var CONFIG = {
   // Libro donde caen las respuestas del forms de FEEDBACK
   SPREADSHEET_ID: '1CROn__xQOuGb6hyub5_-nIF_bUUEwJgwTjAvXtlA0-E',
   // Libro de las EVALUACIONES (pauta de calidad). Vacío = mismo libro de arriba
-  EVA_SPREADSHEET_ID: '',
+  EVA_SPREADSHEET_ID: '1N7-zHE_LZ9TDDRpurKC9RrzW0qCfaeYYwcAHgHwU9Nc',
   // Libro con la Dotación (opcional, para el seguimiento de monitoreos). Vacío = mismo libro
   DOT_SPREADSHEET_ID: '',
+  // Pestaña exacta por su gid (el número después de "gid=" en el link). Vacío = se busca por nombre o encabezados
+  EVA_GID: 1565779780,
+  FB_GID: 1618586159,
   // Nombres de pestaña. Vacío = se detectan solas por sus encabezados
   EVA_SHEET: '',
   FB_SHEET: '',
@@ -82,9 +85,9 @@ function loadSources_() {
   var evaBook = CONFIG.EVA_SPREADSHEET_ID ? SpreadsheetApp.openById(CONFIG.EVA_SPREADSHEET_ID) : main;
   var dotBook = CONFIG.DOT_SPREADSHEET_ID ? SpreadsheetApp.openById(CONFIG.DOT_SPREADSHEET_ID) : main;
 
-  var evaSh = findSheet_(evaBook, CONFIG.EVA_SHEET, function (h) { return h.some(function (x) { return x.indexOf('proceso de negociacion') === 0; }) && h.indexOf('marca temporal') >= 0; });
-  var fbSh = findSheet_(main, CONFIG.FB_SHEET, function (h) { return h.indexOf('dni asesor') >= 0 && h.some(function (x) { return x.indexOf('actitud del agente') >= 0; }); });
-  var dotSh = findSheet_(dotBook, CONFIG.DOT_SHEET, function (h) { return h.indexOf('usuario_sprinklr') >= 0 && h.indexOf('estado') >= 0; });
+  var evaSh = findSheet_(evaBook, CONFIG.EVA_SHEET, CONFIG.EVA_GID, function (h) { return h.some(function (x) { return x.indexOf('proceso de negociacion') === 0; }) && h.indexOf('marca temporal') >= 0; });
+  var fbSh = findSheet_(main, CONFIG.FB_SHEET, CONFIG.FB_GID, function (h) { return h.indexOf('dni asesor') >= 0 && h.some(function (x) { return x.indexOf('actitud del agente') >= 0; }); });
+  var dotSh = findSheet_(dotBook, CONFIG.DOT_SHEET, null, function (h) { return h.indexOf('usuario_sprinklr') >= 0 && h.indexOf('estado') >= 0; });
 
   var fbRows = fbSh ? sheetValues_(fbSh) : [];
   var evaRows = evaSh ? sheetValues_(evaSh) : [];
@@ -109,9 +112,12 @@ function loadSources_() {
   };
 }
 
-function findSheet_(book, name, test) {
+function findSheet_(book, name, gid, test) {
   if (name) return book.getSheetByName(name);
   var sheets = book.getSheets();
+  if (gid) {
+    for (var g = 0; g < sheets.length; g++) if (sheets[g].getSheetId() === Number(gid)) return sheets[g];
+  }
   for (var i = 0; i < sheets.length; i++) {
     var sh = sheets[i];
     if (sh.getLastRow() < 1 || sh.getLastColumn() < 1) continue;
