@@ -18,8 +18,8 @@ Los cálculos replican las fórmulas de la hoja "Data EVA Formulado": nota ponde
 
 ## Instalación (una sola vez, ~5 minutos)
 1. Abre la Google Sheet del feedback → **Extensiones → Apps Script**.
-2. Reemplaza el contenido de `Code.gs` por el de este `Code.gs`.
-3. **+ → HTML**, nómbralo `Index` (sin .html) y pega el contenido de `Index.html`.
+2. Reemplaza el contenido de `Código.gs` por el de `apps-script/Code.gs`.
+3. **+ → HTML**, nómbralo `index` (en minúsculas, sin .html) y pega el contenido de `apps-script/index.html`.
 4. En `CONFIG` (arriba de `Code.gs`):
    - `EVA_SPREADSHEET_ID`: si las respuestas del forms de evaluaciones están en **otro** libro, pon aquí su ID (lo que va entre `/d/` y `/edit` en la URL). Si están en el mismo libro, déjalo vacío.
    - `DOT_SPREADSHEET_ID` / `DOT_SHEET`: libro y pestaña con la Dotación. Ya viene `DOT_SHEET: 'dota'` y, con el ID vacío, se busca en el libro del feedback y luego en el de la pauta (columnas `USUARIO_SPRINKLR`, `DNI`, `Apellidos y Nombres`, `CARGO`, `CAMPAÑA`, `ESTADO`, `JEFE_DIRECTO`, `FECHA_INGRESO`, `FECHA_BAJA`). Es opcional; sin ella, Monitoreo toma la lista de agentes de las evaluaciones. Solo se leen esas columnas; usuarios y contraseñas de sistemas nunca salen de la hoja.
@@ -29,7 +29,10 @@ Los cálculos replican las fórmulas de la hoja "Data EVA Formulado": nota ponde
 6. **Implementar → Nueva implementación → Aplicación web**
    - Ejecutar como: **Yo**
    - Quién tiene acceso: **Cualquier usuario de tu organización** (o "Solo yo"). Evita "Cualquier persona": son datos de personal.
-7. Copia la URL `/exec` y compártela. Para cambios futuros: **Implementar → Gestionar implementaciones → Editar → Nueva versión**.
+7. Copia la URL `/exec` y compártela. **Cada vez que cambies el código** la URL sigue mostrando la versión anterior hasta que hagas **Implementar → Gestionar implementaciones → ✏️ Editar → Versión: Nueva versión → Implementar** (la URL no cambia).
+
+## Página en GitHub Pages
+`https://a365-calidad-movistar-mx.github.io/Reporte-OUT/` muestra el dashboard de Apps Script dentro de un encabezado Movistar (archivo `index.html` de la raíz del repo). Si cambias la URL `/exec`, actualiza `APP_URL` en ese archivo.
 
 ## Sobre la clave
 La clave se valida en el servidor: sin la clave correcta los datos de Monitoreo no llegan al navegador. Para cambiarla, repite el paso 5.
