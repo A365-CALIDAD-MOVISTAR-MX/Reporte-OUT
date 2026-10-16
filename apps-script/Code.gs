@@ -188,15 +188,36 @@ function colIdx_(head, keys) {
   return -1;
 }
 
-function toDate_(v) {
+// Fechas en texto: d/m/aaaa o m/d/aaaa. `mdy` = true si la columna viene como mes/día/año
+function toDate_(v, mdy) {
   if (v instanceof Date) return v;
   if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400000));
   if (!v) return null;
   var s = String(v).trim();
-  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+  var m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    var a = +m[1], b = +m[2];
+    var dia = mdy ? b : a, mes = mdy ? a : b;
+    if (mes > 12 && dia <= 12) { var t = dia; dia = mes; mes = t; }
+    return new Date(+m[3], mes - 1, dia, +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+  }
   var d = new Date(s);
   return isNaN(d) ? null : d;
+}
+
+// Detecta si una columna de fechas en texto viene como mes/día/año
+function colMdy_(rows, ci) {
+  if (ci < 0) return false;
+  var mdy = 0, dmy = 0;
+  for (var r = 1; r < rows.length; r++) {
+    var v = rows[r][ci];
+    if (v instanceof Date || !v) continue;
+    var m = String(v).trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.]\d{4}/);
+    if (!m) continue;
+    if (+m[2] > 12) mdy++;
+    else if (+m[1] > 12) dmy++;
+  }
+  return mdy > dmy;
 }
 
 function ymd_(d) {
@@ -277,9 +298,10 @@ function parseEva_(rows, fb) {
   fb.forEach(function (f) { if (f.dn) fbDn[f.dn] = (fbDn[f.dn] || 0) + 1; });
 
   var out = [];
+  var mdyTs = colMdy_(rows, c.ts), mdyLl = colMdy_(rows, c.fLlamada);
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
-    var ts = toDate_(row[c.ts]);
+    var ts = toDate_(row[c.ts], mdyTs);
     if (!ts) continue;
     var tipo = norm_(row[c.tipo]) === 'venta' ? 'Venta' : 'No Venta';
     var esVenta = tipo === 'Venta';
@@ -306,7 +328,7 @@ function parseEva_(rows, fb) {
       if (v === 'inefectivo' || v === 'no lo hizo') return 0;
       return null;
     });
-    var fLl = c.fLlamada >= 0 ? toDate_(row[c.fLlamada]) : null;
+    var fLl = c.fLlamada >= 0 ? toDate_(row[c.fLlamada], mdyLl) : null;
     var dn = digits_(row[c.dn]);
     var causa = str_(row[c.causa]);
     out.push({
@@ -353,9 +375,10 @@ function parseFeedback_(rows) {
     evid: colIdx_(head, ['evidencia'])
   };
   var out = [];
+  var mdyTs = colMdy_(rows, c.ts);
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
-    var ts = toDate_(row[c.ts]);
+    var ts = toDate_(row[c.ts], mdyTs);
     if (!ts || !str_(row[c.dni])) continue;
     out.push({
       ts: ts.getTime(), fecha: ymd_(ts), mes: ymd_(ts).slice(0, 7), sem: semanaMes_(ts),
@@ -385,12 +408,13 @@ function parseDotacion_(rows) {
     baja: colIdx_(head, ['fecha_baja', 'fecha baja', 'f baja'])
   };
   var out = [];
+  var mdyIng = colMdy_(rows, c.ingreso), mdyBaja = colMdy_(rows, c.baja);
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
     var u = norm_(row[c.usuario]);
     if (!u) continue;
-    var ing = c.ingreso >= 0 ? toDate_(row[c.ingreso]) : null;
-    var baja = c.baja >= 0 ? toDate_(row[c.baja]) : null;
+    var ing = c.ingreso >= 0 ? toDate_(row[c.ingreso], mdyIng) : null;
+    var baja = c.baja >= 0 ? toDate_(row[c.baja], mdyBaja) : null;
     out.push({
       usuario: u, dni: digits_(row[c.dni]), nombre: str_(row[c.nombre]).replace(/\s+/g, ' '),
       cargo: str_(row[c.cargo]), campana: str_(row[c.camp]), estado: str_(row[c.estado]).toUpperCase(),
