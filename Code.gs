@@ -11,7 +11,7 @@ var CONFIG = {
   SPREADSHEET_ID: '1CROn__xQOuGb6hyub5_-nIF_bUUEwJgwTjAvXtlA0-E',
   // Libro de las EVALUACIONES (pauta de calidad). Vacío = mismo libro de arriba
   EVA_SPREADSHEET_ID: '1N7-zHE_LZ9TDDRpurKC9RrzW0qCfaeYYwcAHgHwU9Nc',
-  // Libro con la Dotación (opcional, para el seguimiento de monitoreos). Vacío = mismo libro
+  // Libro con la Dotación. Vacío = se busca en el libro de feedback y luego en el de la pauta
   DOT_SPREADSHEET_ID: '',
   // Pestaña exacta por su gid (el número después de "gid=" en el link). Vacío = se busca por nombre o encabezados
   EVA_GID: 1565779780,
@@ -19,7 +19,7 @@ var CONFIG = {
   // Nombres de pestaña. Vacío = se detectan solas por sus encabezados
   EVA_SHEET: '',
   FB_SHEET: '',
-  DOT_SHEET: '',
+  DOT_SHEET: 'dota',
   // Metas del seguimiento de monitoreos
   EVAS_PROG_SEMANA: 2,       // evaluaciones programadas por agente por semana
   META_DIARIA_MONITOR: 25,   // feedbacks/evaluaciones diarias por monitor
@@ -83,11 +83,15 @@ function getMonitoreo(clave) {
 function loadSources_() {
   var main = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var evaBook = CONFIG.EVA_SPREADSHEET_ID ? SpreadsheetApp.openById(CONFIG.EVA_SPREADSHEET_ID) : main;
-  var dotBook = CONFIG.DOT_SPREADSHEET_ID ? SpreadsheetApp.openById(CONFIG.DOT_SPREADSHEET_ID) : main;
+  var dotBooks = CONFIG.DOT_SPREADSHEET_ID ? [SpreadsheetApp.openById(CONFIG.DOT_SPREADSHEET_ID)] : (evaBook === main ? [main] : [main, evaBook]);
 
   var evaSh = findSheet_(evaBook, CONFIG.EVA_SHEET, CONFIG.EVA_GID, function (h) { return h.some(function (x) { return x.indexOf('proceso de negociacion') === 0; }) && h.indexOf('marca temporal') >= 0; });
   var fbSh = findSheet_(main, CONFIG.FB_SHEET, CONFIG.FB_GID, function (h) { return h.indexOf('dni asesor') >= 0 && h.some(function (x) { return x.indexOf('actitud del agente') >= 0; }); });
-  var dotSh = findSheet_(dotBook, CONFIG.DOT_SHEET, null, function (h) { return h.indexOf('usuario_sprinklr') >= 0 && h.indexOf('estado') >= 0; });
+  var dotSh = null;
+  for (var b = 0; b < dotBooks.length && !dotSh; b++) {
+    dotSh = findSheet_(dotBooks[b], CONFIG.DOT_SHEET, null, null) ||
+      findSheet_(dotBooks[b], '', null, function (h) { return colIdx_(h, ['usuario_sprinklr', 'usuario sprinklr']) >= 0 && h.indexOf('estado') >= 0; });
+  }
 
   var fbRows = fbSh ? sheetValues_(fbSh) : [];
   var evaRows = evaSh ? sheetValues_(evaSh) : [];
@@ -113,8 +117,11 @@ function loadSources_() {
 }
 
 function findSheet_(book, name, gid, test) {
-  if (name) return book.getSheetByName(name);
   var sheets = book.getSheets();
+  if (name) {
+    for (var n = 0; n < sheets.length; n++) if (norm_(sheets[n].getName()) === norm_(name)) return sheets[n];
+    if (!test) return null;
+  }
   if (gid) {
     for (var g = 0; g < sheets.length; g++) if (sheets[g].getSheetId() === Number(gid)) return sheets[g];
   }
@@ -339,15 +346,15 @@ function parseDotacion_(rows) {
   if (rows.length < 2) return [];
   var head = rows[0].map(norm_);
   var c = {
-    usuario: head.indexOf('usuario_sprinklr'),
+    usuario: colIdx_(head, ['usuario_sprinklr', 'usuario sprinklr']),
     dni: head.indexOf('dni'),
-    nombre: colIdx_(head, ['apellidos y nombres']),
+    nombre: colIdx_(head, ['apellidos y nombres', 'nombre completo', 'nombre_sprinklr']),
     cargo: head.indexOf('cargo'),
     camp: colIdx_(head, ['campana']),
     estado: head.indexOf('estado'),
-    jefe: colIdx_(head, ['jefe_directo']),
-    ingreso: colIdx_(head, ['fecha_ingreso']),
-    baja: colIdx_(head, ['fecha_baja'])
+    jefe: colIdx_(head, ['jefe_directo', 'jefe directo', 'supervisor']),
+    ingreso: colIdx_(head, ['fecha_ingreso', 'fecha ingreso', 'f ingreso']),
+    baja: colIdx_(head, ['fecha_baja', 'fecha baja', 'f baja'])
   };
   var out = [];
   for (var r = 1; r < rows.length; r++) {
