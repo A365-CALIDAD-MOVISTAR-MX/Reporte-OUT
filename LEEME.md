@@ -32,7 +32,7 @@ Los cálculos replican las fórmulas de la hoja "Data EVA Formulado": nota ponde
 7. Copia la URL `/exec` y compártela. **Cada vez que cambies el código** la URL sigue mostrando la versión anterior hasta que hagas **Implementar → Gestionar implementaciones → ✏️ Editar → Versión: Nueva versión → Implementar** (la URL no cambia).
 
 ## Página en GitHub Pages
-`https://a365-calidad-movistar-mx.github.io/Reporte-OUT/` muestra el dashboard de Apps Script dentro de un encabezado Movistar (archivo `index.html` de la raíz del repo). Si cambias la URL `/exec`, actualiza `APP_URL` en ese archivo.
+`https://a365-calidad-movistar-mx.github.io/Reporte-OUT/` muestra el dashboard de Apps Script a pantalla completa (archivo `index.html` de la raíz del repo). Si cambias la URL `/exec`, actualiza `APP_URL` en ese archivo.
 
 ## Sobre la clave
 La clave se valida en el servidor: sin la clave correcta los datos de Monitoreo no llegan al navegador. Para cambiarla, repite el paso 5.

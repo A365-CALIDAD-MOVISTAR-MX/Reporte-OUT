@@ -5,30 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reporte Calidad OUT</title>
 <style>
-:root{--bg:#f4f6f9;--ink:#1b2430;--muted:#5f6b7a}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#11161d;--ink:#e7edf4;--muted:#9aa7b6}}
-:root[data-theme="dark"]{--bg:#11161d;--ink:#e7edf4;--muted:#9aa7b6}
-*{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column}
-header{background:linear-gradient(100deg,#0B2739 0%,#0A4F86 55%,#019DF4 100%);color:#fff;border-bottom:4px solid #5BC500;padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
-h1{font-size:16px;margin:0}
-header a{color:#0B2739;background:#5BC500;border-radius:8px;padding:6px 12px;text-decoration:none;font-weight:600;font-size:13px}
-.ayuda{font-size:12px;color:var(--muted);padding:6px 16px}
-iframe{flex:1;width:100%;border:0;background:var(--bg)}
+html,body{margin:0;height:100%;background:#f4f6f9}
+@media (prefers-color-scheme: dark){html,body{background:#11161d}}
+iframe{display:block;width:100%;height:100%;border:0}
 </style>
 </head>
 <body>
-<header>
-  <h1>Reporte de Calidad · Movistar MX OUT</h1>
-  <a id="abrir" target="_blank" rel="noopener">Abrir en pestaña nueva ↗</a>
-</header>
-<div class="ayuda">Si el reporte no carga aquí, ábrelo con el botón "Abrir en pestaña nueva" (Google puede pedir iniciar sesión).</div>
 <iframe id="app" title="Dashboard de Calidad" allow="clipboard-write"></iframe>
 <script>
 // URL de la aplicación web de Apps Script (Implementar → Gestionar implementaciones)
 var APP_URL = 'https://script.google.com/macros/s/AKfycbzYx8XOcOV5BX621s_skXBqwd5JtW1bwE_aZHQzKy-pm9xQwGHya1PHtay4uiHPExx-/exec';
-document.getElementById('abrir').href = APP_URL;
 document.getElementById('app').src = APP_URL;
 </script>
 </body>
