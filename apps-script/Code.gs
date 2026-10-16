@@ -78,6 +78,21 @@ function getMonitoreo(clave) {
   return JSON.stringify({ ok: true, data: buildMonitoreo_(src.eva, src.fb, src.dot, CONFIG) });
 }
 
+/** Ejecutar desde el editor si alguna pestaña sale en 0: muestra en el registro qué leyó de cada hoja. */
+function diagnostico() {
+  var src = loadSources_();
+  Logger.log('Hojas encontradas: ' + JSON.stringify(src.hojas));
+  Logger.log('Evaluaciones leídas: ' + src.eva.length + ' | Feedbacks: ' + src.fb.length + ' | Dotación: ' + src.dot.length);
+  var evaBook = CONFIG.EVA_SPREADSHEET_ID ? SpreadsheetApp.openById(CONFIG.EVA_SPREADSHEET_ID) : SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  evaBook.getSheets().forEach(function (sh) {
+    var lc = Math.max(1, Math.min(sh.getLastColumn(), 12));
+    var lr = Math.max(1, Math.min(sh.getLastRow(), 2));
+    var top = sh.getRange(1, 1, lr, lc).getDisplayValues().map(function (r) { return r.map(function (x) { return String(x).slice(0, 30); }).join(' | '); });
+    Logger.log('Libro pauta → pestaña "' + sh.getName() + '" gid=' + sh.getSheetId() + ' filas=' + sh.getLastRow() + ' | encabezados: ' + top.join(' // '));
+  });
+  if (src.eva.length) Logger.log('Primera evaluación: ' + src.eva[0].fecha + ' ' + src.eva[0].tipo + ' nota=' + src.eva[0].nota);
+}
+
 /* ---------------- Lectura ---------------- */
 
 function loadSources_() {
@@ -93,9 +108,9 @@ function loadSources_() {
       findSheet_(dotBooks[b], '', null, function (h) { return colIdx_(h, ['usuario_sprinklr', 'usuario sprinklr']) >= 0 && h.indexOf('estado') >= 0; });
   }
 
-  var fbRows = fbSh ? sheetValues_(fbSh) : [];
-  var evaRows = evaSh ? sheetValues_(evaSh) : [];
-  var dotRows = dotSh ? sheetValues_(dotSh) : [];
+  var fbRows = fbSh ? fromHeader_(sheetValues_(fbSh), 'marca temporal') : [];
+  var evaRows = evaSh ? fromHeader_(sheetValues_(evaSh), 'marca temporal') : [];
+  var dotRows = dotSh ? fromHeader_(sheetValues_(dotSh), 'estado') : [];
 
   var fb = parseFeedback_(fbRows);
   var dot = parseDotacion_(dotRows);
@@ -128,10 +143,18 @@ function findSheet_(book, name, gid, test) {
   for (var i = 0; i < sheets.length; i++) {
     var sh = sheets[i];
     if (sh.getLastRow() < 1 || sh.getLastColumn() < 1) continue;
-    var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(norm_);
-    if (test(head)) return sh;
+    var top = sh.getRange(1, 1, Math.min(10, sh.getLastRow()), sh.getLastColumn()).getValues();
+    for (var t = 0; t < top.length; t++) if (test(top[t].map(norm_))) return sh;
   }
   return null;
+}
+
+// Devuelve las filas desde la fila de encabezados (la primera, entre las 10 primeras, que contiene `clave`)
+function fromHeader_(rows, clave) {
+  for (var i = 0; i < Math.min(10, rows.length); i++) {
+    if (rows[i].map(norm_).indexOf(clave) >= 0) return rows.slice(i);
+  }
+  return rows;
 }
 
 function sheetValues_(sh) {
