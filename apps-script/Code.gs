@@ -14,7 +14,7 @@ var CONFIG = {
   // Libro con la Dotación. Vacío = se busca en el libro de feedback y luego en el de la pauta
   DOT_SPREADSHEET_ID: '',
   // Pestaña exacta por su gid (el número después de "gid=" en el link). Vacío = se busca por nombre o encabezados
-  EVA_GID: 1565779780,
+  EVA_GID: 643164169,   // pestaña "Forms" del libro de la pauta
   FB_GID: 1618586159,
   // Nombres de pestaña. Vacío = se detectan solas por sus encabezados
   EVA_SHEET: '',
@@ -138,7 +138,12 @@ function findSheet_(book, name, gid, test) {
     if (!test) return null;
   }
   if (gid) {
-    for (var g = 0; g < sheets.length; g++) if (sheets[g].getSheetId() === Number(gid)) return sheets[g];
+    for (var g = 0; g < sheets.length; g++) {
+      if (sheets[g].getSheetId() !== Number(gid)) continue;
+      if (!test) return sheets[g];
+      var top0 = sheets[g].getLastRow() ? sheets[g].getRange(1, 1, Math.min(10, sheets[g].getLastRow()), sheets[g].getLastColumn()).getValues() : [];
+      for (var t0 = 0; t0 < top0.length; t0++) if (test(top0[t0].map(norm_))) return sheets[g];
+    }
   }
   for (var i = 0; i < sheets.length; i++) {
     var sh = sheets[i];
