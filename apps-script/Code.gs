@@ -90,6 +90,9 @@ function diagnostico() {
     var top = sh.getRange(1, 1, lr, lc).getDisplayValues().map(function (r) { return r.map(function (x) { return String(x).slice(0, 30); }).join(' | '); });
     Logger.log('Libro pauta → pestaña "' + sh.getName() + '" gid=' + sh.getSheetId() + ' filas=' + sh.getLastRow() + ' | encabezados: ' + top.join(' // '));
   });
+  var porMes = function (arr) { var o = {}; arr.forEach(function (x) { o[x.mes] = (o[x.mes] || 0) + 1; }); return JSON.stringify(o); };
+  Logger.log('Evaluaciones por mes: ' + porMes(src.eva));
+  Logger.log('Feedbacks por mes: ' + porMes(src.fb));
   if (src.eva.length) Logger.log('Primera evaluación: ' + src.eva[0].fecha + ' ' + src.eva[0].tipo + ' nota=' + src.eva[0].nota);
 }
 
@@ -205,6 +208,16 @@ function toDate_(v, mdy) {
   return isNaN(d) ? null : d;
 }
 
+// Una respuesta de forms no puede tener fecha futura: si la hay y al invertir día y mes
+// queda una fecha pasada, es un día/mes invertido (texto mal leído o la hoja con otro formato regional).
+function noFuture_(d) {
+  if (!d) return d;
+  var limite = new Date().getTime() + 86400000;
+  if (d.getTime() <= limite || d.getDate() > 12) return d;
+  var inv = new Date(d.getFullYear(), d.getDate() - 1, d.getMonth() + 1, d.getHours(), d.getMinutes(), d.getSeconds());
+  return inv.getTime() <= limite ? inv : d;
+}
+
 // Detecta si una columna de fechas en texto viene como mes/día/año
 function colMdy_(rows, ci) {
   if (ci < 0) return false;
@@ -301,7 +314,7 @@ function parseEva_(rows, fb) {
   var mdyTs = colMdy_(rows, c.ts), mdyLl = colMdy_(rows, c.fLlamada);
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
-    var ts = toDate_(row[c.ts], mdyTs);
+    var ts = noFuture_(toDate_(row[c.ts], mdyTs));
     if (!ts) continue;
     var tipo = norm_(row[c.tipo]) === 'venta' ? 'Venta' : 'No Venta';
     var esVenta = tipo === 'Venta';
@@ -328,7 +341,7 @@ function parseEva_(rows, fb) {
       if (v === 'inefectivo' || v === 'no lo hizo') return 0;
       return null;
     });
-    var fLl = c.fLlamada >= 0 ? toDate_(row[c.fLlamada], mdyLl) : null;
+    var fLl = c.fLlamada >= 0 ? noFuture_(toDate_(row[c.fLlamada], mdyLl)) : null;
     var dn = digits_(row[c.dn]);
     var causa = str_(row[c.causa]);
     out.push({
@@ -378,7 +391,7 @@ function parseFeedback_(rows) {
   var mdyTs = colMdy_(rows, c.ts);
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
-    var ts = toDate_(row[c.ts], mdyTs);
+    var ts = noFuture_(toDate_(row[c.ts], mdyTs));
     if (!ts || !str_(row[c.dni])) continue;
     out.push({
       ts: ts.getTime(), fecha: ymd_(ts), mes: ymd_(ts).slice(0, 7), sem: semanaMes_(ts),
