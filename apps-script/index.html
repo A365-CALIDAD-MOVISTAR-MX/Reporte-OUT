@@ -106,6 +106,9 @@ tr.ev{cursor:pointer}
 .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
 .pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.mid{background:var(--mid-soft);color:var(--mid)}.pill.bad{background:var(--bad-soft);color:var(--bad)}
 .muted{color:var(--muted)}
+.dl{display:block;font-size:12.5px;font-weight:600;margin-top:2px;color:var(--muted)}.dl.up{color:var(--ok)}.dl.down{color:var(--bad)}
+.dl b{font-weight:600;color:var(--muted)}
+td .dl{display:inline;margin:0}
 .tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
 .tools label{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
 .tools select,.tools input{width:auto}
@@ -168,7 +171,7 @@ var HABS = ['Saludo','Sondeo','Argumentación','Rebate','Cierre'];
 var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 /* ===== Estado ===== */
-var D = null, MON = null, CLAVE = null, charts = [], META = 85;
+var D = null, MON = null, CLAVE = null, charts = [], META = 85, P = null;
 var F = { mes:'', sem:'', campana:'', supervisor:'', evaluador:'', tipo:'', tipoEval:'' };
 var FM = { supervisor:'', campana:'', solo:'' };
 try { var m0 = +localStorage.getItem('mv_meta'); if (m0 > 0 && m0 <= 100) META = m0; } catch (e) {}
@@ -187,6 +190,18 @@ function mesActual(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMont
 function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 function fdate(s){return s?s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';}
 function count(a,fn){var o={};a.forEach(function(x){var k=fn(x);if(k)o[k]=(o[k]||0)+1;});return Object.keys(o).map(function(k){return [k,o[k]];}).sort(function(a,b){return b[1]-a[1];});}
+function mesPrev(m){if(!m)return '';var y=+m.slice(0,4),mm=+m.slice(5,7)-1;if(mm<1){mm=12;y--;}return y+'-'+('0'+mm).slice(-2);}
+// Variación en puntos porcentuales frente al mes anterior (verde si mejora)
+function dPct(cur,prev,inv){
+  if(!P||cur==null||prev==null)return '';var d=(cur-prev)*100;if(inv)d=-d;
+  var c=Math.abs(d)<0.05?'eq':d>0?'up':'down',raw=(cur-prev)*100;
+  return '<span class="dl '+c+'" title="'+esc(P.label)+': '+pct(prev)+'">'+(Math.abs(raw)<0.05?'= ':raw>0?'▲ ':'▼ ')+Math.abs(raw).toFixed(1)+' pp <b>vs '+esc(P.corto)+'</b></span>';
+}
+// Variación de cantidades (neutra)
+function dNum(cur,prev){
+  if(!P||prev==null)return '';var d=cur-prev;
+  return '<span class="dl" title="'+esc(P.label)+': '+prev+'">'+(d===0?'= ':d>0?'▲ ':'▼ ')+Math.abs(d)+(prev?' ('+(d>0?'+':d<0?'−':'')+Math.abs(d/prev*100).toFixed(0)+'%)':'')+' <b>vs '+esc(P.corto)+'</b></span>';
+}
 function semLabel(k){var p=k.split('|');return mesLabel(p[0]).slice(0,3)+' S'+p[1];}
 
 /* ===== Datos ===== */
@@ -205,10 +220,10 @@ function cargar(forzar){
     if(CLAVE)cargarMon(CLAVE);
   }).catch(function(e){document.getElementById('main').innerHTML='<div class="empty"><b>No se pudieron leer los datos</b><br>'+esc(e&&e.message||e)+'</div>';});
 }
-function evaF(){return D.eva.filter(function(e){
-  return (!F.mes||e.mes===F.mes)&&(!F.sem||e.sem==F.sem)&&(!F.campana||e.campana===F.campana)&&(!F.supervisor||e.supervisor===F.supervisor)&&(!F.evaluador||e.evaluador===F.evaluador)&&(!F.tipo||e.tipo===F.tipo)&&(!F.tipoEval||e.tipoEval===F.tipoEval);});}
-function fbF(){return D.fb.filter(function(f){
-  return (!F.mes||f.mes===F.mes)&&(!F.sem||f.sem==F.sem)&&(!F.campana||f.campana===F.campana)&&(!F.supervisor||f.supervisor===F.supervisor)&&(!F.evaluador||f.evaluador===F.evaluador);});}
+function evaF(mes){if(mes===undefined)mes=F.mes;return D.eva.filter(function(e){
+  return (!mes||e.mes===mes)&&(!F.sem||e.sem==F.sem)&&(!F.campana||e.campana===F.campana)&&(!F.supervisor||e.supervisor===F.supervisor)&&(!F.evaluador||e.evaluador===F.evaluador)&&(!F.tipo||e.tipo===F.tipo)&&(!F.tipoEval||e.tipoEval===F.tipoEval);});}
+function fbF(mes){if(mes===undefined)mes=F.mes;return D.fb.filter(function(f){
+  return (!mes||f.mes===mes)&&(!F.sem||f.sem==F.sem)&&(!F.campana||f.campana===F.campana)&&(!F.supervisor||f.supervisor===F.supervisor)&&(!F.evaluador||f.evaluador===F.evaluador);});}
 
 function resumen(a){
   var g=function(k){return avg(a.map(function(e){return e[k];}));};
@@ -281,6 +296,8 @@ function render(){
   if(!D)return;
   charts.forEach(function(c){c.destroy();});charts=[];
   var a=evaF(),fb=fbF();
+  P=null;
+  if(F.mes){var pm=mesPrev(F.mes),pa=evaF(pm),pf=fbF(pm);if(pa.length||pf.length)P={mes:pm,label:mesLabel(pm),corto:mesLabel(pm).slice(0,3).toLowerCase(),a:pa,fb:pf,r:resumen(pa)};}
   var fechas=a.map(function(e){return e.fecha;}).sort();
   document.getElementById('subt').innerHTML='Evaluaciones de llamadas'+(fechas.length?' · '+fdate(fechas[0])+' al '+fdate(fechas[fechas.length-1]):'')+' · '+a.length+' monitoreos · '+fb.length+' feedbacks · actualizado '+esc(D.actualizado)+
     (!D.hojas.eva||!D.hojas.fb?' · <span class="miss">No se encontró la hoja de '+[!D.hojas.eva?'evaluaciones':'',!D.hojas.fb?'feedback':''].filter(Boolean).join(' y ')+'</span>':'');
@@ -298,8 +315,9 @@ function sResumen(a,fb){
   var totMax=sum(BLOQ.map(function(x){return b[x[0]].max;}))||1;
   var stack=BLOQ.filter(function(x){return b[x[0]].max>0;}).map(function(x){var o=b[x[0]];return '<div class="seg" style="flex:'+o.max+'" title="'+x[1]+': '+o.ok.toFixed(1)+' de '+o.max.toFixed(1)+' pts"><div class="fill" style="width:'+(o.ok/o.max*100)+'%;background:var('+x[2]+')"></div><span class="t">'+x[1]+'</span><span class="v">'+o.ok.toFixed(1)+'/'+o.max.toFixed(1)+'</span></div>';}).join('');
   var scale=BLOQ.filter(function(x){return b[x[0]].max>0;}).map(function(x){return '<span style="flex:'+b[x[0]].max+'">'+Math.round(b[x[0]].max/totMax*100)+' pts</span>';}).join('');
-  var pec=function(n,v,d,c){return '<div class="pec" style="--c:var('+c+')"><div class="n">'+n+'</div><div class="p">'+pct(v)+'</div><div class="d">'+d+'</div><div class="mini"><i style="width:'+((v||0)*100)+'%"></i></div></div>';};
-  var kpi=function(l,v){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';};
+  var pec=function(n,v,d,c,pv){return '<div class="pec" style="--c:var('+c+')"><div class="n">'+n+'</div><div class="p">'+pct(v)+'</div>'+dPct(v,pv)+'<div class="d">'+d+'</div><div class="mini"><i style="width:'+((v||0)*100)+'%"></i></div></div>';};
+  var kpi=function(l,v,dl){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(dl||'')+'</div>';};
+  var pr=P?P.r:{};
   var ventas=a.filter(function(e){return e.tipo==='Venta';}).length;
   var porAg=groupBy(a,function(e){return e.agente;});
   var bajo=Object.keys(porAg).filter(function(k){return avg(porAg[k].map(function(e){return e.nota;}))<m;}).length;
@@ -314,14 +332,14 @@ function sResumen(a,fb){
     st[0]?ins('Ítem con más quiebres',esc(st[0].nombre),st[0].n+' evaluaciones con "No cumple" · '+pct(st[0].q)+' de quiebre','--bad'):'',
     supR.length>1?ins('Supervisor con menor nota',esc(supR[0][0])+' · '+pct(supR[0][1].nota),'Mejor: '+esc(supR[supR.length-1][0])+' · '+pct(supR[supR.length-1][1].nota),'--b-neg'):'',
     obj[0]?ins('Objeción más frecuente',esc(obj[0][0]),obj[0][1]+' casos · '+pct(obj[0][1]/a.length)+' de las evaluaciones','--b-venta'):'',
-    ins('Agentes bajo meta',bajo+' de '+Object.keys(porAg).length,'con nota promedio menor a '+META+'%',bajo?'--mid':'--ok'),
+    ins('Agentes bajo meta',bajo+' de '+Object.keys(porAg).length,'con nota promedio menor a '+META+'%'+(P?' · '+esc(P.corto)+': '+(function(){var g=groupBy(P.a,function(e){return e.agente;});return Object.keys(g).filter(function(k){return avg(g[k].map(function(e){return e.nota;}))<m;}).length+' de '+Object.keys(g).length;})():''),bajo?'--mid':'--ok'),
     ins('Feedback pendiente',sinFb+' evaluaciones','con algún "No cumple" y sin feedback registrado',sinFb?'--mid':'--ok')
   ].join('');
   return '<section id="resumen" style="margin-top:0"><div class="panel"><div class="hero">'+
-    '<div><div class="herolab">Nota de calidad</div><div class="big">'+(r.nota==null?'–':(r.nota*100).toFixed(1)+'<small>%</small>')+'</div><div class="note">Promedio de la nota ponderada · meta '+META+'%'+(r.nota==null?'':'<span class="badge pill '+cls(r.nota)+'">'+(r.nota>=m?'En meta':'Bajo meta')+'</span>')+'</div></div>'+
+    '<div><div class="herolab">Nota de calidad</div><div class="big">'+(r.nota==null?'–':(r.nota*100).toFixed(1)+'<small>%</small>')+'</div><div class="note">Promedio de la nota ponderada · meta '+META+'%'+(r.nota==null?'':'<span class="badge pill '+cls(r.nota)+'">'+(r.nota>=m?'En meta':'Bajo meta')+'</span>')+'</div>'+(P&&P.r.nota!=null?'<div style="margin-top:6px">'+dPct(r.nota,P.r.nota).replace('</b></span>',' ('+pct(P.r.nota)+')</b></span>')+'</div>':'')+'</div>'+
     '<div><div class="stack">'+stack+'</div><div class="scale">'+scale+'</div><div class="note" style="margin-top:8px">Puntos promedio logrados por bloque. Cada bloque ocupa el ancho de su peso en la pauta (cambia entre llamadas de venta y no venta); lo coloreado es lo logrado. "No aplica" suma el peso del ítem, igual que la nota ponderada.</div></div>'+
-    '</div><div class="pecs">'+pec('PEC Usuario Final (UF)',r.uf,'Sin errores que afectan al cliente','--b-venta')+pec('PEC Negocio (NEG)',r.ecNeg,'Sin errores que afectan al negocio','--b-neg')+pec('PEC Cumplimiento (CUM)',r.ecCum,'Referidos y tipificación','--b-cierre')+pec('ENC',r.enc,'Fluidez, despedida y clima','--b-exp')+pec('PEC global',r.pec,'Promedio UF·NEG·CUM, −10% si falla ENC','--mv-green')+'</div></div>'+
-    '<div class="kpis">'+kpi('Evaluaciones',a.length)+kpi('Venta / No venta',ventas+' / '+(a.length-ventas))+kpi('Agentes evaluados',Object.keys(porAg).length)+kpi('CUM Negociación',pct(r.neg))+kpi('CUM Cierre',pct(r.cierre))+kpi('Feedbacks',fb.length)+kpi('Evas con feedback',pct(r.fb))+'</div>'+
+    '</div><div class="pecs">'+pec('PEC Usuario Final (UF)',r.uf,'Sin errores que afectan al cliente','--b-venta',pr.uf)+pec('PEC Negocio (NEG)',r.ecNeg,'Sin errores que afectan al negocio','--b-neg',pr.ecNeg)+pec('PEC Cumplimiento (CUM)',r.ecCum,'Referidos y tipificación','--b-cierre',pr.ecCum)+pec('ENC',r.enc,'Fluidez, despedida y clima','--b-exp',pr.enc)+pec('PEC global',r.pec,'Promedio UF·NEG·CUM, −10% si falla ENC','--mv-green',pr.pec)+'</div></div>'+
+    '<div class="kpis">'+kpi('Evaluaciones',a.length,P&&dNum(a.length,P.a.length))+kpi('Venta / No venta',ventas+' / '+(a.length-ventas),P&&dNum(ventas,P.a.filter(function(e){return e.tipo==='Venta';}).length))+kpi('Agentes evaluados',Object.keys(porAg).length,P&&dNum(Object.keys(porAg).length,uniq(P.a.map(function(e){return e.agente;})).length))+kpi('CUM Negociación',pct(r.neg),dPct(r.neg,pr.neg))+kpi('CUM Cierre',pct(r.cierre),dPct(r.cierre,pr.cierre))+kpi('Feedbacks',fb.length,P&&dNum(fb.length,P.fb.length))+kpi('Evas con feedback',pct(r.fb),dPct(r.fb,pr.fb))+'</div>'+
     '<h2 style="margin-top:26px">Lectura rápida</h2><p class="lead">Se recalcula con los filtros aplicados.</p><div class="insights">'+insights+'</div></section>';
 }
 
@@ -329,18 +347,23 @@ function sResumen(a,fb){
 function sTiempo(a,fb){
   var g=groupBy(a,function(e){return e.mes+'|'+e.sem;}),gf=groupBy(fb,function(f){return f.mes+'|'+f.sem;});
   var ks=uniq(Object.keys(g).concat(Object.keys(gf)));
-  var rows=ks.map(function(k){return filaRes(mesLabel(k.split('|')[0])+' · Semana '+k.split('|')[1],resumen(g[k]||[]),'<td>'+((gf[k]||[]).length)+'</td>');});
+  var prevN=null;
+  var rows=ks.map(function(k){var x=resumen(g[k]||[]),d=(prevN!=null&&x.nota!=null)?x.nota-prevN:null,cel='<td data-v="'+(d==null?'':d)+'">'+(d==null?'–':'<span class="dl '+(Math.abs(d)<0.0005?'':d>0?'up':'down')+'">'+(d>0?'▲ ':d<0?'▼ ':'= ')+Math.abs(d*100).toFixed(1)+' pp</span>')+'</td>';if(x.nota!=null)prevN=x.nota;return filaRes(mesLabel(k.split('|')[0])+' · Semana '+k.split('|')[1],x,'<td>'+((gf[k]||[]).length)+'</td>'+cel);});
   return '<section id="tiempo"><h2>Evolución semanal</h2><p class="lead">Semana del mes: días 1–7, 8–14, 15–21, 22–28 y 29–31.</p>'+
     '<div class="panel"><div class="chart"><canvas id="chEvo"></canvas></div></div><div style="margin-top:14px">'+
-    tabla(['Semana'].concat(HEAD_RES,['# Feedbacks']),rows,filaRes('Total',resumen(a),'<td>'+fb.length+'</td>','tot'))+'</div></section>';
+    tabla(['Semana'].concat(HEAD_RES,['# Feedbacks','Var. nota vs sem. anterior']),rows,filaRes('Total',resumen(a),'<td>'+fb.length+'</td><td></td>','tot'))+'</div></section>';
 }
 
 /* --- Campaña y supervisor --- */
 function sSupervisor(a){
-  var r=resumen(a),pc=groupBy(a,function(e){return e.campana||'(sin campaña)';}),ps=groupBy(a,function(e){return e.supervisor||'(sin supervisor)';});
-  return '<section id="supervisor"><h2>Por campaña y supervisor</h2><p class="lead">CUM de bloque = evaluaciones sin ningún "No cumple" en ese bloque. CUM Venta solo considera llamadas de venta.</p>'+
-    tabla(['Campaña'].concat(HEAD_RES),Object.keys(pc).sort().map(function(k){return filaRes(k,resumen(pc[k]));}),filaRes('Total general',r,'','tot'))+
-    '<div style="margin-top:14px">'+tabla(['Supervisor'].concat(HEAD_RES),Object.keys(ps).sort().map(function(k){return filaRes(k,resumen(ps[k]));}),filaRes('Total general',r,'','tot'))+'</div></section>';
+  var r=resumen(a),fc=function(e){return e.campana||'(sin campaña)';},fs=function(e){return e.supervisor||'(sin supervisor)';};
+  var pc=groupBy(a,fc),ps=groupBy(a,fs),ppc=P?groupBy(P.a,fc):{},pps=P?groupBy(P.a,fs):{};
+  var ext=function(prev,cur){if(!P)return '';var pr=prev&&prev.length?resumen(prev):null;return '<td data-v="'+(pr?pr.nota:'')+'">'+(pr?pct(pr.nota):'–')+'</td><td data-v="'+(pr&&cur.nota!=null?cur.nota-pr.nota:'')+'">'+(pr?dPct(cur.nota,pr.nota).replace(/ <b>.*<\/b>/,''):'–')+'</td>';};
+  var head=HEAD_RES.concat(P?['Nota '+P.corto,'Var. nota']:[]);
+  var fila=function(k,g,pg){var x=resumen(g[k]);return filaRes(k,x,ext(pg[k],x));};
+  return '<section id="supervisor"><h2>Por campaña y supervisor</h2><p class="lead">CUM de bloque = evaluaciones sin ningún "No cumple" en ese bloque. CUM Venta solo considera llamadas de venta.'+(P?' Las dos últimas columnas comparan la nota con '+esc(P.label)+' (mismos filtros).':'')+'</p>'+
+    tabla(['Campaña'].concat(head),Object.keys(pc).sort().map(function(k){return fila(k,pc,ppc);}),filaRes('Total general',r,ext(P&&P.a,r),'tot'))+
+    '<div style="margin-top:14px">'+tabla(['Supervisor'].concat(head),Object.keys(ps).sort().map(function(k){return fila(k,ps,pps);}),filaRes('Total general',r,ext(P&&P.a,r),'tot'))+'</div></section>';
 }
 
 /* --- Ítems --- */
