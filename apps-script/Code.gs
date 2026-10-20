@@ -29,7 +29,68 @@ var CONFIG = {
 
 /* ---------------- Web App ---------------- */
 
-function doGet() {
+// ?central=1 → datos para CENTRAL (Calidad A365): una fila por evaluación con los mismos cálculos del
+// dashboard y NADA personal (sin agente, usuario, DN, caso, supervisor, evaluador ni detalle).
+var COLUMNAS_CENTRAL = ['Fecha', 'Campaña', 'Tipo de llamada', 'Venta', 'Nota', 'PEC UF', 'PEC NEG', 'PEC CUM', 'ENC', 'PEC Global'];
+
+function central_() {
+  var cache = CacheService.getScriptCache();
+  var out = cache.get('central_v1');
+  if (!out) {
+    try {
+      var filas = loadSources_().eva.map(function (e) {
+        return [e.fecha, e.campana, e.tipo, e.tipo === 'Venta' ? 1 : 0, e.nota, e.uf, e.ecNeg, e.ecCum, e.enc, e.pec];
+      });
+      out = JSON.stringify({
+        ok: true, items: COLUMNAS_CENTRAL, filas: filas,
+        actualizado: Utilities.formatDate(new Date(), CONFIG.TZ, 'dd/MM/yyyy HH:mm')
+      });
+      if (out.length < 95000) cache.put('central_v1', out, CONFIG.CACHE_SEGUNDOS);
+    } catch (err) {
+      out = JSON.stringify({ ok: false, error: String(err && err.message || err) });
+    }
+  }
+  return ContentService.createTextOutput(out).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** Ejecutar desde el editor para revisar lo que recibe CENTRAL (registro de ejecución). */
+function probarCentral() {
+  var r = JSON.parse(central_().getContent());
+  Logger.log(r.ok ? (r.filas.length + ' evaluaciones. Primera: ' + JSON.stringify(r.filas[0])) : ('Error: ' + r.error));
+}
+
+// ?api=data|mon&callback=fn → datos del dashboard en JSONP para la página de GitHub Pages
+// (así la página no tiene que mostrar Apps Script dentro de un marco). Monitoreo exige el hash de la clave.
+function api_(p) {
+  var cb = String(p.callback || '');
+  if (!/^[A-Za-z_$][\w$]{0,60}$/.test(cb)) {
+    return ContentService.createTextOutput('{"ok":false,"error":"callback inválido"}').setMimeType(ContentService.MimeType.JSON);
+  }
+  var out;
+  try {
+    if (p.api === 'mon') out = monitoreoPorHash_(String(p.h || ''));
+    else out = p.r ? refrescar() : getData();
+  } catch (err) {
+    out = JSON.stringify({ ok: false, error: String(err && err.message || err) });
+  }
+  return ContentService.createTextOutput(cb + '(' + JSON.stringify(out) + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);
+}
+
+// El navegador envía SHA-256("movout|" + clave), nunca la clave en la URL
+function monitoreoPorHash_(h) {
+  var guardado = PropertiesService.getScriptProperties().getProperty('MONITOREO_HASH');
+  if (!guardado) return JSON.stringify({ ok: false, error: 'La clave aún no fue configurada (ejecuta configurarClave).' });
+  if (!h || h !== guardado) {
+    Utilities.sleep(800);
+    return JSON.stringify({ ok: false, error: 'Clave incorrecta.' });
+  }
+  var src = loadSources_();
+  return JSON.stringify({ ok: true, data: buildMonitoreo_(src.eva, src.fb, src.dot, CONFIG) });
+}
+
+function doGet(e) {
+  if (e && e.parameter && e.parameter.central) return central_();
+  if (e && e.parameter && e.parameter.api) return api_(e.parameter);
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('Dashboard Calidad MOV OUT')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -39,7 +100,8 @@ function doGet() {
 /** Ejecutar UNA vez desde el editor para fijar la clave de la pestaña Monitoreo. */
 function configurarClave() {
   var clave = 'CAMBIAR_ESTA_CLAVE';
-  if (clave === 'CAMBIAR_ESTA_CLAVE') throw new Error('Edita la variable "clave" antes de ejecutar.');
+  // la comparación va partida para que "reemplazar todo" en el editor no la cambie también
+  if (!clave || clave === 'CAMBIAR_' + 'ESTA_CLAVE') throw new Error('Escribe tu clave en la línea de arriba (var clave = ...) antes de ejecutar.');
   PropertiesService.getScriptProperties().setProperty('MONITOREO_HASH', hash_(clave));
   Logger.log('Clave de Monitoreo configurada.');
 }
@@ -83,6 +145,7 @@ function diagnostico() {
   var src = loadSources_();
   Logger.log('Hojas encontradas: ' + JSON.stringify(src.hojas));
   Logger.log('Evaluaciones leídas: ' + src.eva.length + ' | Feedbacks: ' + src.fb.length + ' | Dotación: ' + src.dot.length);
+  if (src.dot.length) Logger.log('Dotación con nombre: ' + src.dot.filter(function (d) { return d.nombre; }).length + ' de ' + src.dot.length + '. Ejemplo: ' + JSON.stringify({ usuario: src.dot[0].usuario, nombre: src.dot[0].nombre, cargo: src.dot[0].cargo }));
   var evaBook = CONFIG.EVA_SPREADSHEET_ID ? SpreadsheetApp.openById(CONFIG.EVA_SPREADSHEET_ID) : SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   evaBook.getSheets().forEach(function (sh) {
     var lc = Math.max(1, Math.min(sh.getLastColumn(), 12));
@@ -240,6 +303,8 @@ function ymd_(d) {
 function semanaMes_(d) { return Math.min(5, Math.ceil(d.getDate() / 7)); }
 
 function str_(v) { return v == null ? '' : String(v).trim(); }
+// texto de una celda que debería traer un nombre: un 0 o un error de fórmula (#N/A, #REF!) cuenta como vacío
+function txt_(v) { var t = str_(v); return /^[\d\s.,-]*$/.test(t) || /^#/.test(t) ? '' : t; }
 
 function digits_(v) { return str_(v).replace(/\.0+$/, '').replace(/\D/g, ''); }
 
@@ -412,7 +477,8 @@ function parseDotacion_(rows) {
   var c = {
     usuario: colIdx_(head, ['usuario_sprinklr', 'usuario sprinklr']),
     dni: head.indexOf('dni'),
-    nombre: colIdx_(head, ['apellidos y nombres', 'nombre completo', 'nombre_sprinklr']),
+    nombre: colIdx_(head, ['apellidos y nombres', 'apellidos_y_nombres', 'nombres y apellidos', 'nombres_y_apellidos',
+      'nombre completo', 'nombre_completo', 'nombre_sprinklr', 'nombre sprinklr', 'nombres', 'nombre', 'agente', 'asesor']),
     cargo: head.indexOf('cargo'),
     camp: colIdx_(head, ['campana']),
     estado: head.indexOf('estado'),
@@ -429,9 +495,9 @@ function parseDotacion_(rows) {
     var ing = c.ingreso >= 0 ? toDate_(row[c.ingreso], mdyIng) : null;
     var baja = c.baja >= 0 ? toDate_(row[c.baja], mdyBaja) : null;
     out.push({
-      usuario: u, dni: digits_(row[c.dni]), nombre: str_(row[c.nombre]).replace(/\s+/g, ' '),
-      cargo: str_(row[c.cargo]), campana: str_(row[c.camp]), estado: str_(row[c.estado]).toUpperCase(),
-      supervisor: str_(row[c.jefe]),
+      usuario: u, dni: digits_(row[c.dni]), nombre: txt_(row[c.nombre]).replace(/\s+/g, ' '),
+      cargo: str_(row[c.cargo]), campana: txt_(row[c.camp]), estado: str_(row[c.estado]).toUpperCase(),
+      supervisor: txt_(row[c.jefe]),
       ingreso: ing ? ymd_(ing) : '', baja: baja ? ymd_(baja) : ''
     });
   }
@@ -448,13 +514,16 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
 
   // Agentes: dotación de ejecutivos, o en su defecto los agentes evaluados
   var agentes = {};
+  // nombre según las evaluaciones, por si la dotación no lo trae
+  var nombreEva = {};
+  eva.forEach(function (e) { var n = txt_(e.agente); if (e.usuario && n && !nombreEva[e.usuario]) nombreEva[e.usuario] = n; });
   dot.forEach(function (d) {
     if (!/ejecutivo|asesor|agente/i.test(d.cargo) && d.cargo) return;
-    agentes[d.usuario] = { usuario: d.usuario, dni: d.dni, nombre: d.nombre, campana: d.campana, supervisor: d.supervisor, estado: d.estado, ingreso: d.ingreso, baja: d.baja };
+    agentes[d.usuario] = { usuario: d.usuario, dni: d.dni, nombre: d.nombre || nombreEva[d.usuario] || '', campana: d.campana, supervisor: d.supervisor, estado: d.estado, ingreso: d.ingreso, baja: d.baja };
   });
   eva.forEach(function (e) {
     var k = e.usuario || norm_(e.agente);
-    if (!agentes[k]) agentes[k] = { usuario: k, dni: '', nombre: e.agente, campana: e.campana, supervisor: e.supervisor, estado: dot.length ? 'NO EN DOTACIÓN' : 'ACTIVO', ingreso: '', baja: '' };
+    if (!agentes[k]) agentes[k] = { usuario: k, dni: '', nombre: txt_(e.agente), campana: e.campana, supervisor: e.supervisor, estado: dot.length ? 'NO EN DOTACIÓN' : 'ACTIVO', ingreso: '', baja: '' };
   });
 
   var fbPorDn = {};
@@ -490,7 +559,7 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
         if (prog || o.v || o.nv) tieneAlgo = true;
         semanas.push({ prog: prog, v: o.v, nv: o.nv, fb: o.fb });
       }
-      if (!tieneAlgo) return;
+      if (!tieneAlgo || !a.nombre) return;   // sin nombre (ni en dotación ni en evaluaciones) no se muestra
       filas.push({ mes: mes, usuario: a.usuario, dni: a.dni, nombre: a.nombre, campana: a.campana, supervisor: a.supervisor, estado: a.estado, semanas: semanas });
     });
   });
@@ -507,7 +576,7 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
   });
 
   // Evaluaciones con "No Cumple" que aún no tienen feedback
-  var pendientes = eva.filter(function (e) { return !e.fb && e.items.indexOf('N') >= 0; }).map(function (e) {
+  var pendientes = eva.filter(function (e) { return !e.fb && e.items.indexOf('N') >= 0 && txt_(e.agente); }).map(function (e) {
     return { fecha: e.fecha, mes: e.mes, sem: e.sem, agente: e.agente, supervisor: e.supervisor, campana: e.campana, evaluador: e.evaluador, dn: e.dn, caso: e.caso, nota: e.nota };
   });
 
