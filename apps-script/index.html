@@ -431,7 +431,7 @@ var HABS = ['Saludo','Sondeo','Argumentación','Rebate','Cierre'];
 var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 /* ===== Estado ===== */
-var D = null, MON = null, CLAVE = null, charts = [], META = 85, P = null, TAB = 'resumen';
+var D = null, MON = null, CLAVE = null, charts = [], META = 90, P = null, TAB = 'resumen';
 var TABS = [['resumen','Resumen'],['pauta','Pauta por ítem'],['errores','Errores / Pareto'],['agentes','Agentes'],['feedback','Feedback'],['monitoreo','Monitoreo'],['metodo','Metodología']];
 var ICO = {resumen:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   pauta:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
@@ -446,7 +446,6 @@ function siPct(a,k,re){var v=a.filter(function(e){return e[k];});return v.length
 var RE_PLAN=/^s[ií]/i, RE_TIPI=/^(correct|cumple|s[ií])/i;
 var F = { mes:'', sem:'', campana:'', supervisor:'', evaluador:'', tipo:'', tipoEval:'' };
 var FM = { supervisor:'', campana:'', solo:'' };
-try { var m0 = +localStorage.getItem('mv_meta'); if (m0 > 0 && m0 <= 100) META = m0; } catch (e) {}
 try { document.documentElement.dataset.theme = localStorage.getItem('mv_theme') || 'dark'; } catch (e) { document.documentElement.dataset.theme = 'dark'; }
 
 /* ===== Utilidades ===== */
@@ -529,10 +528,9 @@ function pintarFiltros(){
     ['tipoEval','Tipo de monitoreo',uniq(e.map(function(x){return x.tipoEval;}))]];
   document.getElementById('filters').innerHTML=defs.map(function(d){
     return '<label class="f">'+d[1]+'<select data-f="'+d[0]+'"><option value="">Todos</option>'+d[2].map(function(v){return '<option value="'+esc(v)+'"'+(String(F[d[0]])===v?' selected':'')+'>'+esc(d[3]?d[3](v):v)+'</option>';}).join('')+'</select></label>';
-  }).join('')+'<label class="f meta">Meta (%)<input id="meta" type="number" min="1" max="100" value="'+META+'"></label>'+
+  }).join('')+
   '<label class="f clr">&nbsp;<button type="button" class="ghost" id="btnClr">✕ Limpiar</button></label><span class="count" id="count"></span>';
   document.querySelectorAll('[data-f]').forEach(function(s){s.onchange=function(){F[s.dataset.f]=s.value;render();};});
-  document.getElementById('meta').onchange=function(){var v=+this.value;if(v>0&&v<=100){META=v;try{localStorage.setItem('mv_meta',v);}catch(e){}render();}};
   document.getElementById('btnClr').onclick=function(){Object.keys(F).forEach(function(k){F[k]='';});F.mes=mesActual();pintarFiltros();render();};
 }
 
