@@ -370,6 +370,19 @@ footer{padding:22px 0 36px;color:var(--ink-3);font-size:11.5px;border-top:1px so
   if (window.google && google.script) return;
   var APP_URL = 'https://script.google.com/macros/s/AKfycbzYx8XOcOV5BX621s_skXBqwd5JtW1bwE_aZHQzKy-pm9xQwGHya1PHtay4uiHPExx-/exec';
   var n = 0;
+  // Pide los datos sin enviar las sesiones de Google del navegador (con varias cuentas abiertas,
+  // Google desvía la petición y falla). Si fetch no está disponible o falla, usa JSONP.
+  function pedir(params){
+    if (!window.fetch) return jsonp(params);
+    return fetch(APP_URL + '?' + params + '&callback=cb', { credentials: 'omit', cache: 'no-store' })
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function(t){
+        var i = t.indexOf('cb('), j = t.lastIndexOf(')');
+        if (i !== 0 || j < 3) throw new Error('Respuesta inesperada de Apps Script');
+        return JSON.parse(t.slice(3, j));
+      })
+      .catch(function(){ return jsonp(params); });
+  }
   function jsonp(params){
     return new Promise(function(res, rej){
       var cb = '__mv' + (++n) + Date.now(), s = document.createElement('script');
@@ -387,9 +400,9 @@ footer{padding:22px 0 36px;color:var(--ink-3);font-size:11.5px;border-top:1px so
     });
   }
   var api = {
-    getData: function(){ return jsonp('api=data'); },
-    refrescar: function(){ return jsonp('api=data&r=1'); },
-    getMonitoreo: function(k){ return sha(String(k || '')).then(function(h){ return jsonp('api=mon&h=' + h); }); }
+    getData: function(){ return pedir('api=data'); },
+    refrescar: function(){ return pedir('api=data&r=1'); },
+    getMonitoreo: function(k){ return sha(String(k || '')).then(function(h){ return pedir('api=mon&h=' + h); }); }
   };
   function mk(ok, ko){
     var o = { withSuccessHandler: function(f){ return mk(f, ko); }, withFailureHandler: function(f){ return mk(ok, f); } };
