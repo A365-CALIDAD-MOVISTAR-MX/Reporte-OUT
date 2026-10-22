@@ -12,11 +12,11 @@ var CONFIG = {
   // Libro de las EVALUACIONES (pauta de calidad). Vacío = mismo libro de arriba
   EVA_SPREADSHEET_ID: '1N7-zHE_LZ9TDDRpurKC9RrzW0qCfaeYYwcAHgHwU9Nc',
   // Libro con la Dotación. Vacío = se busca en el libro de feedback y luego en el de la pauta
-  DOT_SPREADSHEET_ID: '1N7-zHE_LZ9TDDRpurKC9RrzW0qCfaeYYwcAHgHwU9Nc',   // libro de la pauta
+  DOT_SPREADSHEET_ID: '1o6Wj-W7anoUQyl6xPn4gQX_KsCQGvUmmU1ACZ-Y3lC0',   // libro de la dotación
   // Pestaña exacta por su gid (el número después de "gid=" en el link). Vacío = se busca por nombre o encabezados
   EVA_GID: 643164169,   // pestaña "Forms" del libro de la pauta
   FB_GID: 1618586159,
-  DOT_GID: 1565779780,  // pestaña "Dotación" del libro de la pauta
+  DOT_GID: 0,  // primera pestaña del libro de la dotación
   // Nombres de pestaña. Vacío = se detectan solas por sus encabezados
   EVA_SHEET: '',
   FB_SHEET: '',
@@ -205,7 +205,7 @@ function diagnostico() {
     ' · con nombre: ' + src.dot.filter(function (d) { return d.nombre; }).length + ' · ESTADO: ' + cuenta(src.dot, 'estado'));
   Logger.log('Estado en evaluaciones: ' + cuenta(src.eva, 'estado'));
   var dotSh = null;
-  [CONFIG.SPREADSHEET_ID, CONFIG.EVA_SPREADSHEET_ID].filter(String).forEach(function (id) {
+  [CONFIG.DOT_SPREADSHEET_ID, CONFIG.SPREADSHEET_ID, CONFIG.EVA_SPREADSHEET_ID].filter(String).forEach(function (id) {
     SpreadsheetApp.openById(id).getSheets().forEach(function (sh) { if (sh.getName() === src.hojas.dot) dotSh = sh; });
   });
   if (dotSh) {
@@ -229,7 +229,7 @@ function loadSources_() {
   var fbSh = findSheet_(main, CONFIG.FB_SHEET, CONFIG.FB_GID, function (h) { return h.indexOf('dni asesor') >= 0 && h.some(function (x) { return x.indexOf('actitud del agente') >= 0; }); });
   var dotSh = null;
   for (var b = 0; b < dotBooks.length && !dotSh; b++) {
-    dotSh = (CONFIG.DOT_GID ? findSheet_(dotBooks[b], '', CONFIG.DOT_GID, null) : null) ||
+    dotSh = (CONFIG.DOT_GID !== '' && CONFIG.DOT_GID != null ? findSheet_(dotBooks[b], '', CONFIG.DOT_GID, null) : null) ||
       findSheet_(dotBooks[b], CONFIG.DOT_SHEET, null, null) ||
       findSheet_(dotBooks[b], '', null, function (h) { return colIdx_(h, ['usuario_sprinklr', 'usuario sprinklr']) >= 0 && h.indexOf('estado') >= 0; });
   }
@@ -283,7 +283,7 @@ function findSheet_(book, name, gid, test) {
     for (var n = 0; n < sheets.length; n++) if (norm_(sheets[n].getName()) === norm_(name)) return sheets[n];
     if (!test) return null;
   }
-  if (gid) {
+  if (gid !== '' && gid != null) {
     for (var g = 0; g < sheets.length; g++) {
       if (sheets[g].getSheetId() !== Number(gid)) continue;
       if (!test) return sheets[g];
