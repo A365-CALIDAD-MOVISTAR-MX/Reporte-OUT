@@ -210,10 +210,16 @@ function loadSources_() {
   // nombre del agente en feedback: por DN (de la evaluación) o por DNI (dotación)
   var porDn = {}; eva.forEach(function (e) { if (e.dn) porDn[e.dn] = e; });
   var porDni = {}; dot.forEach(function (d) { if (d.dni) porDni[d.dni] = d; });
+  // Estado del agente según la dotación: Activo / Inactivo / Sin dotación (para el filtro del dashboard)
+  var porUsr = {}, porNom = {};
+  dot.forEach(function (d) { if (d.usuario) porUsr[d.usuario] = d; if (d.nombre) porNom[norm_(d.nombre)] = d; });
+  var estado = function (d) { return !d ? 'Sin dotación' : d.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'; };
+  eva.forEach(function (e) { e.estado = estado(porUsr[e.usuario] || porNom[norm_(e.agente)]); });
   fb.forEach(function (f) {
     var e = porDn[f.dn], d = porDni[f.dni];
     f.agente = (d && d.nombre) || (e && e.agente) || f.dni;
     f.supervisor = (e && e.supervisor) || (d && d.supervisor) || '';
+    f.estado = d ? estado(d) : e ? e.estado : 'Sin dotación';
   });
 
   return {
