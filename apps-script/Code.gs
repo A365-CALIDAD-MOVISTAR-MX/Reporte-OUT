@@ -24,7 +24,9 @@ var CONFIG = {
   EVAS_PROG_SEMANA: 2,       // evaluaciones programadas por agente por semana
   META_DIARIA_MONITOR: 25,   // feedbacks/evaluaciones diarias por monitor
   CACHE_SEGUNDOS: 120,
-  TZ: 'America/Mexico_City'
+  TZ: 'America/Mexico_City',
+  // Inicio de la operación: ninguna respuesta puede ser anterior (sirve para corregir día/mes invertidos)
+  INICIO_OPERACION: '2026-08-01'
 };
 
 /* ---------------- Web App ---------------- */
@@ -88,7 +90,30 @@ function monitoreoPorHash_(h) {
   return JSON.stringify({ ok: true, data: buildMonitoreo_(src.eva, src.fb, src.dot, CONFIG) });
 }
 
+// ?avance=1 → módulo "Avance equipo" de CENTRAL: por evaluación solo fecha, hora de envío (Marca temporal) y
+// duración de la llamada (si el forms la pide), de los últimos 35 días. Nada de personas (ni agente, ni cliente, ni monitor).
+function avance_() {
+  var desde = ymd_(new Date(Date.now() - 35 * 86400000));
+  try {
+    var filas = loadSources_().eva.filter(function (e) { return e.fecha >= desde; }).map(function (e) {
+      return [e.fecha, Utilities.formatDate(new Date(e.ts), CONFIG.TZ, 'HH:mm'), e.dur || ''];
+    });
+    var out = JSON.stringify({ ok: true, items: ['Fecha', 'Hora', 'Duración'], filas: filas,
+      actualizado: Utilities.formatDate(new Date(), CONFIG.TZ, "yyyy-MM-dd'T'HH:mm:ss") });
+  } catch (err) {
+    out = JSON.stringify({ ok: false, error: String(err && err.message || err) });
+  }
+  return ContentService.createTextOutput(out).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** Duración de la llamada: las celdas de duración llegan como fecha desde el 30/12/1899 → segundos. */
+function duracion_(v) {
+  if (v instanceof Date) return Math.round((v.getTime() - new Date(1899, 11, 30).getTime()) / 1000);
+  return str_(v);
+}
+
 function doGet(e) {
+  if (e && e.parameter && e.parameter.avance) return avance_();
   if (e && e.parameter && e.parameter.central) return central_();
   if (e && e.parameter && e.parameter.api) return api_(e.parameter);
   return HtmlService.createHtmlOutputFromFile('index')
@@ -273,12 +298,23 @@ function toDate_(v, mdy) {
 
 // Una respuesta de forms no puede tener fecha futura: si la hay y al invertir día y mes
 // queda una fecha pasada, es un día/mes invertido (texto mal leído o la hoja con otro formato regional).
-function noFuture_(d) {
+function noFuture_(d, ref) {
   if (!d) return d;
   var limite = new Date().getTime() + 86400000;
-  if (d.getTime() <= limite || d.getDate() > 12) return d;
-  var inv = new Date(d.getFullYear(), d.getDate() - 1, d.getMonth() + 1, d.getHours(), d.getMinutes(), d.getSeconds());
-  return inv.getTime() <= limite ? inv : d;
+  var p = String(CONFIG.INICIO_OPERACION || '2000-01-01').split('-');
+  var inicio = new Date(+p[0], +p[1] - 1, +p[2]).getTime();
+  var valida = function (x) { return x.getTime() >= inicio && x.getTime() <= limite; };
+  // Lectura alternativa con día y mes invertidos (solo si el día puede ser un mes)
+  var inv = d.getDate() <= 12 && d.getDate() !== d.getMonth() + 1
+    ? new Date(d.getFullYear(), d.getDate() - 1, d.getMonth() + 1, d.getHours(), d.getMinutes(), d.getSeconds()) : null;
+  if (!inv) return d;
+  var okD = valida(d), okI = valida(inv);
+  if (okD && !okI) return d;
+  if (okI && !okD) return inv;
+  if (!okD && !okI) return d;
+  // Ambas posibles: la más cercana a la fecha de referencia (fecha de llamada), si la hay
+  if (ref) return Math.abs(inv - ref) < Math.abs(d - ref) ? inv : d;
+  return d;
 }
 
 // Detecta si una columna de fechas en texto viene como mes/día/año
@@ -357,7 +393,8 @@ function parseEva_(rows, fb) {
     siAg: colIdx_(head, ['si es agente']),
     siCl: colIdx_(head, ['si es cliente']),
     siPr: colIdx_(head, ['si es proceso']),
-    tipif: colIdx_(head, ['cumplimiento de tipificacion'])
+    tipif: colIdx_(head, ['cumplimiento de tipificacion']),
+    dur: colIdx_(head, ['duracion de la llamada', 'duracion de llamada', 'tiempo de llamada'])
   };
   var itemCols = ITEMS.map(function (it) {
     var key = it[0] === 'leguaje' ? ['leguaje', 'lenguaje'] : [it[0]];
@@ -379,8 +416,10 @@ function parseEva_(rows, fb) {
   var mdyTs = colMdy_(rows, c.ts), mdyLl = colMdy_(rows, c.fLlamada);
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
-    var ts = noFuture_(toDate_(row[c.ts], mdyTs));
+    var fLl = c.fLlamada >= 0 ? noFuture_(toDate_(row[c.fLlamada], mdyLl)) : null;
+    var ts = noFuture_(toDate_(row[c.ts], mdyTs), fLl);
     if (!ts) continue;
+    if (fLl) fLl = noFuture_(fLl, ts);
     var tipo = norm_(row[c.tipo]) === 'venta' ? 'Venta' : 'No Venta';
     var esVenta = tipo === 'Venta';
     var items = itemCols.map(function (ci) {
@@ -406,7 +445,6 @@ function parseEva_(rows, fb) {
       if (v === 'inefectivo' || v === 'no lo hizo') return 0;
       return null;
     });
-    var fLl = c.fLlamada >= 0 ? noFuture_(toDate_(row[c.fLlamada], mdyLl)) : null;
     var dn = digits_(row[c.dn]);
     var causa = str_(row[c.causa]);
     out.push({
@@ -416,6 +454,7 @@ function parseEva_(rows, fb) {
       agente: str_(row[c.agente]), usuario: norm_(row[c.usuario]), dn: dn,
       caso: str_(row[c.caso]), supervisor: str_(row[c.sup]), campana: str_(row[c.camp]),
       tipo: tipo, tipoEval: str_(row[c.tipoEval]), evaluador: str_(row[c.evaluador]),
+      dur: c.dur < 0 ? '' : duracion_(row[c.dur]),
       items: items.join(''),
       nota: nota / 100,
       cNeg: ok(bloque.neg), cVenta: esVenta ? ok(bloque.venta) : null, cCierre: ok(bloque.cierre), cExp: ok(bloque.exp),
