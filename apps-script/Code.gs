@@ -23,6 +23,7 @@ var CONFIG = {
   DOT_SHEET: 'dota',
   // Metas del seguimiento de monitoreos
   EVAS_PROG_SEMANA: 2,       // evaluaciones programadas por agente por semana
+  EVAS_PROG_MES: 440,        // total de evaluaciones programadas del mes (por defecto, sin filtros). 0 = calcular por agente
   META_DIARIA_MONITOR: 25,   // feedbacks/evaluaciones diarias por monitor
   // Personal que NO se programa en Monitoreo (no son asesores de venta): por jefe directo o por cargo
   EXCLUIR_JEFES: ['Jessica Chirinos', 'Nilton Valencia'],   // back office y estructura
@@ -711,11 +712,13 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
   var dia = {};
   eva.forEach(function (e) {
     var k = e.fecha + '|' + e.evaluador;
-    (dia[k] || (dia[k] = { fecha: e.fecha, mes: e.mes, sem: e.sem, monitor: e.evaluador, evas: 0, fbs: 0 })).evas++;
+    var dk = dia[k] || (dia[k] = { fecha: e.fecha, mes: e.mes, sem: e.sem, monitor: e.evaluador, evas: 0, fbs: 0, errs: 0 });
+    dk.evas++;
+    if (e.items.indexOf('N') >= 0) dk.errs++;   // evaluaciones con error: las que requieren feedback
   });
   fb.forEach(function (f) {
     var k = f.fecha + '|' + f.evaluador;
-    (dia[k] || (dia[k] = { fecha: f.fecha, mes: f.mes, sem: f.sem, monitor: f.evaluador, evas: 0, fbs: 0 })).fbs++;
+    (dia[k] || (dia[k] = { fecha: f.fecha, mes: f.mes, sem: f.sem, monitor: f.evaluador, evas: 0, fbs: 0, errs: 0 })).fbs++;
   });
 
   // Evaluaciones con "No Cumple" que aún no tienen feedback
@@ -726,6 +729,7 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
   return {
     meses: Object.keys(meses).sort(),
     progSemana: cfg.EVAS_PROG_SEMANA,
+    progMes: cfg.EVAS_PROG_MES || 0,
     metaDiaria: cfg.META_DIARIA_MONITOR,
     usaDotacion: dot.length > 0,
     agentes: filas,
