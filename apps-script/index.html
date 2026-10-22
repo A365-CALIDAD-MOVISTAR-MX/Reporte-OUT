@@ -431,7 +431,7 @@ var HABS = ['Saludo','Sondeo','Argumentación','Rebate','Cierre'];
 var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 /* ===== Estado ===== */
-var D = null, MON = null, CLAVE = null, charts = [], META = 90, P = null, TAB = 'resumen';
+var D = null, MON = null, CLAVE = null, charts = [], META = 85, P = null, TAB = 'resumen';
 var TABS = [['resumen','Resumen'],['pauta','Pauta por ítem'],['errores','Errores / Pareto'],['agentes','Agentes'],['feedback','Feedback'],['monitoreo','Monitoreo'],['metodo','Metodología']];
 var ICO = {resumen:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   pauta:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
@@ -454,7 +454,9 @@ function pct(x,d){return x==null||isNaN(x)?'–':(x*100).toFixed(d==null?1:d)+'%
 function bigPct(x){return x==null||isNaN(x)?'–':(x*100).toFixed(1)+'<small>%</small>';}
 function avg(a){a=a.filter(function(x){return x!=null&&!isNaN(x);});return a.length?a.reduce(function(s,x){return s+x;},0)/a.length:null;}
 function sum(a){return a.reduce(function(s,x){return s+(+x||0);},0);}
-function cls(x){var m=META/100;return x==null?'':x>=m?'ok':x>=m-0.15?'mid':'bad';}
+// Metas por indicador (%): la nota de calidad usa META
+var METAS = { pec: 90, uf: 95, neg: 90, cum: 99.5, enc: 90 };
+function cls(x,meta){var m=(meta||META)/100;return x==null?'':x>=m?'ok':x>=m-0.15?'mid':'bad';}
 function pill(x){return x==null?'<span class="muted">–</span>':'<span class="pill '+cls(x)+'">'+pct(x)+'</span>';}
 function uniq(a){var o={};a.forEach(function(x){if(x)o[x]=1;});return Object.keys(o).sort();}
 function groupBy(a,fn){var o={};a.forEach(function(x){var k=fn(x);(o[k]||(o[k]=[])).push(x);});return o;}
@@ -594,13 +596,14 @@ function render(){
 }
 
 /* --- Piezas visuales del resumen --- */
-function gauge(v,label,sub){
-  var R=50,C=2*Math.PI*R,f=v==null?0:Math.max(0,Math.min(1,v)),m=META/100,an=m*2*Math.PI-Math.PI/2;
+function gauge(v,label,sub,meta){
+  meta=meta||META;
+  var R=50,C=2*Math.PI*R,f=v==null?0:Math.max(0,Math.min(1,v)),m=meta/100,an=m*2*Math.PI-Math.PI/2;
   var x1=60+40*Math.cos(an),y1=60+40*Math.sin(an),x2=60+60*Math.cos(an),y2=60+60*Math.sin(an);
   return '<div class="gauge"><svg viewBox="0 0 120 120" role="img" aria-label="'+esc(label)+': '+pct(v)+'"><circle class="trk" cx="60" cy="60" r="'+R+'"/>'+
-    '<circle class="arc '+cls(v)+'" cx="60" cy="60" r="'+R+'" stroke-dasharray="'+(f*C).toFixed(1)+' '+C.toFixed(1)+'" style="color:var(--'+(cls(v)||'ink-3')+')"/>'+
+    '<circle class="arc '+cls(v,meta)+'" cx="60" cy="60" r="'+R+'" stroke-dasharray="'+(f*C).toFixed(1)+' '+C.toFixed(1)+'" style="color:var(--'+(cls(v,meta)||'ink-3')+')"/>'+
     '<line class="meta" x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'"/>'+
-    '<text class="gv" x="60" y="64" text-anchor="middle">'+(v==null?'–':(v*100).toFixed(1))+'</text><text class="gn" x="60" y="80" text-anchor="middle">meta '+META+'</text></svg>'+
+    '<text class="gv" x="60" y="64" text-anchor="middle">'+(v==null?'–':(v*100).toFixed(1))+'</text><text class="gn" x="60" y="80" text-anchor="middle">meta '+meta+'</text></svg>'+
     '<div class="gl">'+label+'</div><div class="gs">'+(sub||'')+'</div></div>';
 }
 function dumbSup(a){
@@ -659,7 +662,7 @@ function sResumen(a,fb){
   var stages=
     stage('--blue',a.length,'Evaluaciones','Venta <b>'+ventas+'</b> · No venta <b>'+(a.length-ventas)+'</b>'+(P?dNum(a.length,P.a.length):''))+
     stage('--green',bigPct(r.nota),'Nota de calidad'+est,'Meta <b>'+META+'%</b>'+dPct(r.nota,pr.nota),true)+
-    stage('--teal',bigPct(r.pec),'PEC global','UF '+pct(r.uf,0)+' · NEG '+pct(r.ecNeg,0)+' · CUM '+pct(r.ecCum,0)+dPct(r.pec,pr.pec))+
+    stage('--teal',bigPct(r.pec),'PEC global'+(r.pec==null?'':' <span class="tag '+cls(r.pec,METAS.pec)+'">'+(r.pec>=METAS.pec/100?'En meta':'Bajo meta')+'</span>'),'Meta <b>'+METAS.pec+'%</b> · UF '+pct(r.uf,0)+' · NEG '+pct(r.ecNeg,0)+' · CUM '+pct(r.ecCum,0)+dPct(r.pec,pr.pec))+
     stage(bajo?'--bad':'--ok',bajo+'<small>/'+nAg+'</small>','Agentes bajo meta','nota promedio &lt; '+META+'%'+(P?dNum(bajo,pBajo):''));
   // Puntos por bloque
   var BL=BLOQ.filter(function(x){return b[x[0]].max>0;}),totMax=sum(BL.map(function(x){return b[x[0]].max;}))||1,totOk=sum(BL.map(function(x){return b[x[0]].ok;}));
@@ -686,7 +689,7 @@ function sResumen(a,fb){
     '<div class="g32 mt"><div class="panel"><h3>Nota vs PEC por supervisor</h3><p class="note">Cada fila une la nota de calidad con el PEC global; el largo de la barra es la brecha entre ambos.</p>'+
       '<div class="legend"><span><i style="background:var(--green)"></i>Nota de calidad</span><span><i style="background:var(--blue-2)"></i>PEC global</span><span><i class="dash"></i>Meta '+META+'%</span></div>'+dumbSup(a)+'</div>'+
     '<div class="panel"><h3>Indicadores PEC</h3><p class="note">% de evaluaciones sin errores en cada grupo. La marca en cada anillo es la meta.</p><div class="gauges">'+
-      gauge(r.uf,'Usuario final',dPct(r.uf,pr.uf))+gauge(r.ecNeg,'Negocio',dPct(r.ecNeg,pr.ecNeg))+gauge(r.ecCum,'Cumplimiento',dPct(r.ecCum,pr.ecCum))+gauge(r.enc,'ENC',dPct(r.enc,pr.enc))+'</div></div></div>'+
+      gauge(r.uf,'Usuario final',dPct(r.uf,pr.uf),METAS.uf)+gauge(r.ecNeg,'Negocio',dPct(r.ecNeg,pr.ecNeg),METAS.neg)+gauge(r.ecCum,'Cumplimiento',dPct(r.ecCum,pr.ecCum),METAS.cum)+gauge(r.enc,'ENC',dPct(r.enc,pr.enc),METAS.enc)+'</div></div></div>'+
     rankAg(a,r)+
     '<h2 style="margin-top:34px">Lectura rápida</h2><p class="lead">Se recalcula con los filtros aplicados.</p><div class="insights">'+insights+'</div></section>';
 }
@@ -827,7 +830,7 @@ function postCharts(a,fb){
   var stages=
     stage('--blue',a.length,'Evaluaciones','Venta <b>'+ventas+'</b> · No venta <b>'+(a.length-ventas)+'</b>'+(P?dNum(a.length,P.a.length):''))+
     stage('--green',bigPct(r.nota),'Nota de calidad'+est,'Meta <b>'+META+'%</b>'+dPct(r.nota,pr.nota),true)+
-    stage('--teal',bigPct(r.pec),'PEC global','UF '+pct(r.uf,0)+' · NEG '+pct(r.ecNeg,0)+' · CUM '+pct(r.ecCum,0)+dPct(r.pec,pr.pec))+
+    stage('--teal',bigPct(r.pec),'PEC global'+(r.pec==null?'':' <span class="tag '+cls(r.pec,METAS.pec)+'">'+(r.pec>=METAS.pec/100?'En meta':'Bajo meta')+'</span>'),'Meta <b>'+METAS.pec+'%</b> · UF '+pct(r.uf,0)+' · NEG '+pct(r.ecNeg,0)+' · CUM '+pct(r.ecCum,0)+dPct(r.pec,pr.pec))+
     stage(bajo?'--bad':'--ok',bajo+'<small>/'+nAg+'</small>','Agentes bajo meta','nota promedio &lt; '+META+'%'+(P?dNum(bajo,pBajo):''));
   // Puntos por bloque
   var BL=BLOQ.filter(function(x){return b[x[0]].max>0;}),totMax=sum(BL.map(function(x){return b[x[0]].max;}))||1,totOk=sum(BL.map(function(x){return b[x[0]].ok;}));
@@ -854,7 +857,7 @@ function postCharts(a,fb){
     '<div class="g32 mt"><div class="panel"><h3>Nota vs PEC por supervisor</h3><p class="note">Cada fila une la nota de calidad con el PEC global; el largo de la barra es la brecha entre ambos.</p>'+
       '<div class="legend"><span><i style="background:var(--green)"></i>Nota de calidad</span><span><i style="background:var(--blue-2)"></i>PEC global</span><span><i class="dash"></i>Meta '+META+'%</span></div>'+dumbSup(a)+'</div>'+
     '<div class="panel"><h3>Indicadores PEC</h3><p class="note">% de evaluaciones sin errores en cada grupo. La marca en cada anillo es la meta.</p><div class="gauges">'+
-      gauge(r.uf,'Usuario final',dPct(r.uf,pr.uf))+gauge(r.ecNeg,'Negocio',dPct(r.ecNeg,pr.ecNeg))+gauge(r.ecCum,'Cumplimiento',dPct(r.ecCum,pr.ecCum))+gauge(r.enc,'ENC',dPct(r.enc,pr.enc))+'</div></div></div>'+
+      gauge(r.uf,'Usuario final',dPct(r.uf,pr.uf),METAS.uf)+gauge(r.ecNeg,'Negocio',dPct(r.ecNeg,pr.ecNeg),METAS.neg)+gauge(r.ecCum,'Cumplimiento',dPct(r.ecCum,pr.ecCum),METAS.cum)+gauge(r.enc,'ENC',dPct(r.enc,pr.enc),METAS.enc)+'</div></div></div>'+
     rankAg(a,r)+
     '<h2 style="margin-top:34px">Lectura rápida</h2><p class="lead">Se recalcula con los filtros aplicados.</p><div class="insights">'+insights+'</div></section>';
 }
