@@ -244,7 +244,7 @@ function loadSources_() {
 
   // nombre del agente en feedback: por DN (de la evaluación) o por DNI (dotación)
   var porDn = {}; eva.forEach(function (e) { if (e.dn) porDn[e.dn] = e; });
-  var porDni = {}; dot.forEach(function (d) { if (d.dni) porDni[d.dni] = d; });
+  var porDni = {}; dot.forEach(function (d) { if (d.dni && (!porDni[d.dni] || d.estado === 'ACTIVO')) porDni[d.dni] = d; });
   // Estado del agente según la dotación: Activo / Inactivo / Sin dotación (para el filtro del dashboard)
   var porUsr = {}, porNom = {};
   var clave = function (n) { return norm_(n).replace(/[^a-z ]/g, ' ').split(' ').filter(String).sort().join(' '); };
@@ -254,7 +254,16 @@ function loadSources_() {
     if (d.nombre && (!porNom[clave(d.nombre)] || d.estado === 'ACTIVO')) porNom[clave(d.nombre)] = d;
   });
   var estado = function (d) { return !d ? 'Sin dotación' : d.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'; };
-  eva.forEach(function (e) { e.estado = estado(porNom[clave(e.agente)] || porUsr[e.usuario]); });
+  // DNI del agente: la evaluación no lo trae, pero el feedback sí ("DNI Asesor") y comparte el DN de la llamada.
+  // Se obtiene por DN y se extiende a todas las evaluaciones del mismo agente (por nombre).
+  var dniPorNom = {};
+  var fbPorDn = {}; fb.forEach(function (f) { if (f.dn && f.dni) fbPorDn[f.dn] = f.dni; });
+  eva.forEach(function (e) { var dni = fbPorDn[e.dn]; if (dni && !dniPorNom[clave(e.agente)]) dniPorNom[clave(e.agente)] = dni; });
+  eva.forEach(function (e) {
+    var dniE = fbPorDn[e.dn] || dniPorNom[clave(e.agente)] || '';   // no se envía al navegador
+    // prioridad: DNI → nombre → usuario de Sprinklr (las cuentas se reasignan, por eso va al final)
+    e.estado = estado((dniE && porDni[dniE]) || porNom[clave(e.agente)] || porUsr[e.usuario]);
+  });
   fb.forEach(function (f) {
     var e = porDn[f.dn], d = porDni[f.dni];
     f.agente = (d && d.nombre) || (e && e.agente) || f.dni;
@@ -627,7 +636,7 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
   });
   eva.forEach(function (e) {
     var k = e.usuario || norm_(e.agente);
-    if (!agentes[k]) agentes[k] = { usuario: k, dni: '', nombre: nombreEva[k] || nombreOk_(e.agente), campana: e.campana, supervisor: e.supervisor, estado: dot.length ? 'Sin dotación' : 'Activo', ingreso: '', baja: '' };
+    if (!agentes[k]) agentes[k] = { usuario: k, dni: '', nombre: nombreEva[k] || nombreOk_(e.agente), campana: e.campana, supervisor: e.supervisor, estado: dot.length ? (e.estado || 'Sin dotación') : 'Activo', ingreso: '', baja: '' };
   });
 
   var fbPorDn = {};
