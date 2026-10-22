@@ -24,6 +24,9 @@ var CONFIG = {
   // Metas del seguimiento de monitoreos
   EVAS_PROG_SEMANA: 2,       // evaluaciones programadas por agente por semana
   META_DIARIA_MONITOR: 25,   // feedbacks/evaluaciones diarias por monitor
+  // Personal que NO se programa en Monitoreo (no son asesores de venta): por jefe directo o por cargo
+  EXCLUIR_JEFES: ['Jessica Chirinos', 'Nilton Valencia'],   // back office y estructura
+  EXCLUIR_CARGOS: /back|estructura|supervisor|calidad|gerente|formador|capacitador|analista|coordinador|jefe|monitor/i,
   CACHE_SEGUNDOS: 120,
   TZ: 'America/Mexico_City',
   // Inicio de la operación: ninguna respuesta puede ser anterior (sirve para corregir día/mes invertidos)
@@ -272,7 +275,7 @@ function loadSources_() {
   });
 
   return {
-    eva: eva, fb: fb, dot: dot,
+    eva: unificarSup_(eva, fb, dot) && eva, fb: fb, dot: dot,
     hojas: { eva: evaSh ? evaSh.getName() : null, fb: fbSh ? fbSh.getName() : null, dot: dotSh ? dotSh.getName() : null }
   };
 }
@@ -578,6 +581,7 @@ function parseDotacion_(rows) {
     nombre: colIdx_(head, ['apellidos y nombres', 'apellidos_y_nombres', 'nombres y apellidos', 'nombres_y_apellidos',
       'nombre completo', 'nombre_completo', 'nombre_sprinklr', 'nombre sprinklr', 'nombres', 'nombre', 'agente', 'asesor']),
     cargo: head.indexOf('cargo'),
+    cargo2: colIdx_(head, ['cargo_a365', 'cargo a365']),
     camp: colIdx_(head, ['campana']),
     estado: head.indexOf('estado'),
     jefe: colIdx_(head, ['jefe_directo', 'jefe directo', 'supervisor']),
@@ -604,7 +608,7 @@ function parseDotacion_(rows) {
     var baja = c.baja >= 0 ? toDate_(row[c.baja], mdyBaja) : null;
     out.push({
       usuario: u, dni: digits_(row[c.dni]), nombre: (nombreArmado || txt_(row[c.nombre])).replace(/\s+/g, ' '),
-      cargo: str_(row[c.cargo]), campana: txt_(row[c.camp]), estado: str_(row[c.estado]).toUpperCase(),
+      cargo: (str_(row[c.cargo]) + ' ' + (c.cargo2 >= 0 ? str_(row[c.cargo2]) : '')).trim(), campana: txt_(row[c.camp]), estado: str_(row[c.estado]).toUpperCase(),
       supervisor: txt_(row[c.jefe]),
       ingreso: ing ? ymd_(ing) : '', baja: baja ? ymd_(baja) : ''
     });
@@ -618,6 +622,23 @@ function parseDotacion_(rows) {
 function nombreOk_(n) { n = txt_(n); return n && n.length <= 70 && !/[:"“”?¿!]/.test(n) && n.split(' ').length <= 8 ? n : ''; }
 function estadoTxt_(e) { e = String(e || '').toUpperCase(); return e === 'ACTIVO' ? 'Activo' : !e || e === 'NO EN DOTACIÓN' ? 'Sin dotación' : 'Inactivo'; }
 
+function excluirJefe_(sup, cfg) {
+  var n = norm_(sup);
+  return !!n && (cfg.EXCLUIR_JEFES || []).some(function (j) { var k = norm_(j); return n === k || n.indexOf(k) === 0; });
+}
+
+// Unifica nombres de supervisor escritos distinto ("Jorge Cribillero" / "Jorge Cribilleros"):
+// misma clave sin acentos ni "s" final por palabra → se usa la forma más frecuente
+function unificarSup_(eva, fb, dot) {
+  var clave = function (n) { return norm_(n).split(' ').map(function (w) { return w.replace(/s$/, ''); }).join(' '); };
+  var cnt = {};
+  [eva, fb, dot].forEach(function (arr) { arr.forEach(function (x) { if (x.supervisor) { var k = clave(x.supervisor); (cnt[k] = cnt[k] || {})[x.supervisor] = (cnt[k][x.supervisor] || 0) + 1; } }); });
+  var canon = {};
+  Object.keys(cnt).forEach(function (k) { canon[k] = Object.keys(cnt[k]).sort(function (a, b) { return cnt[k][b] - cnt[k][a]; })[0]; });
+  [eva, fb, dot].forEach(function (arr) { arr.forEach(function (x) { if (x.supervisor) x.supervisor = canon[clave(x.supervisor)]; }); });
+  return true;
+}
+
 function buildMonitoreo_(eva, fb, dot, cfg) {
   var hoy = ymd_(new Date());
   var meses = {};
@@ -625,17 +646,19 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
   fb.forEach(function (f) { meses[f.mes] = 1; });
 
   // Agentes: dotación de ejecutivos, o en su defecto los agentes evaluados
-  var agentes = {};
+  var agentes = {}, excluidos = {};
   // nombre según las evaluaciones, por si la dotación no lo trae
   var nombreEva = {};
   eva.forEach(function (e) { var n = nombreOk_(e.agente); if (e.usuario && n && !nombreEva[e.usuario]) nombreEva[e.usuario] = n; });
   dot.forEach(function (d) {
     if (!/ejecutivo|asesor|agente/i.test(d.cargo) && d.cargo) return;
+    if ((cfg.EXCLUIR_CARGOS && cfg.EXCLUIR_CARGOS.test(d.cargo)) || excluirJefe_(d.supervisor, cfg)) { if (d.usuario) excluidos[d.usuario] = 1; return; }
     if (!d.usuario || (agentes[d.usuario] && d.estado !== 'ACTIVO')) return;
     agentes[d.usuario] = { usuario: d.usuario, dni: d.dni, nombre: nombreOk_(d.nombre) || nombreEva[d.usuario] || '', campana: d.campana, supervisor: d.supervisor, estado: estadoTxt_(d.estado), ingreso: d.ingreso, baja: d.baja };
   });
   eva.forEach(function (e) {
     var k = e.usuario || norm_(e.agente);
+    if (excluidos[k] || excluirJefe_(e.supervisor, cfg)) return;
     if (!agentes[k]) agentes[k] = { usuario: k, dni: '', nombre: nombreEva[k] || nombreOk_(e.agente), campana: e.campana, supervisor: e.supervisor, estado: dot.length ? (e.estado || 'Sin dotación') : 'Activo', ingreso: '', baja: '' };
   });
 
@@ -666,12 +689,13 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
         var finDia = s === 5 ? ultimo : s * 7;
         if ((s - 1) * 7 + 1 > ultimo) { semanas.push(null); continue; }
         var fin = mes + '-' + ('0' + finDia).slice(-2);
-        var activo = (!a.ingreso || a.ingreso <= fin) && (!a.baja || a.baja >= ini) && ini <= hoy;
-        // la semana 5 (días 29-31) solo programa si el agente ya tiene evaluaciones ahí
+        // Programación del mes completo: todas las semanas (incluida la 29-31) desde el día 1,
+        // mientras el agente esté vigente (ingreso / baja) en esa semana
+        var activo = (!a.ingreso || a.ingreso <= fin) && (!a.baja || a.baja >= ini);
         var o = cnt[k + '|' + mes + '|' + s] || { v: 0, nv: 0, fb: 0 };
         // Solo se programa a los activos; a los que no están en la dotación, solo si tienen evaluaciones ese mes
         var programable = a.estado === 'Activo' || (a.estado === 'Sin dotación' && evaMes[k + '|' + mes]);
-        var prog = programable && activo && (s < 5 || o.v + o.nv > 0) ? cfg.EVAS_PROG_SEMANA : 0;
+        var prog = programable && activo ? cfg.EVAS_PROG_SEMANA : 0;
         if (a.baja && a.baja < ini) prog = 0;
         if (prog || o.v || o.nv) tieneAlgo = true;
         semanas.push({ prog: prog, v: o.v, nv: o.nv, fb: o.fb });
