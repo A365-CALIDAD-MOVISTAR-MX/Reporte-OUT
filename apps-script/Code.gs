@@ -308,6 +308,9 @@ function sheetValues_(sh) {
 
 /* ---------------- Utilidades ---------------- */
 
+// Usuario de Sprinklr comparable: en la dotación aparece como "a365@sprinklr1/com" y en el forms "a365@sprinklr1.com"
+function usr_(v) { return norm_(v).replace(/\//g, '.').replace(/\s+/g, ''); }
+
 function norm_(s) {
   return String(s == null ? '' : s).toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -498,7 +501,7 @@ function parseEva_(rows, fb) {
       ts: ts.getTime(),
       fecha: ymd_(ts), mes: ymd_(ts).slice(0, 7), sem: semanaMes_(ts),
       fLlamada: fLl ? ymd_(fLl) : '',
-      agente: str_(row[c.agente]), usuario: norm_(row[c.usuario]), dn: dn,
+      agente: str_(row[c.agente]), usuario: usr_(row[c.usuario]), dn: dn,
       caso: str_(row[c.caso]), supervisor: str_(row[c.sup]), campana: str_(row[c.camp]),
       tipo: tipo, tipoEval: str_(row[c.tipoEval]), evaluador: str_(row[c.evaluador]),
       dur: c.dur < 0 ? '' : duracion_(row[c.dur]),
@@ -585,7 +588,7 @@ function parseDotacion_(rows) {
   var mdyIng = colMdy_(rows, c.ingreso), mdyBaja = colMdy_(rows, c.baja);
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
-    var u = c.usuario >= 0 ? norm_(row[c.usuario]) : '';
+    var u = c.usuario >= 0 ? usr_(row[c.usuario]) : '';
     var nombreArmado = cApe >= 0 && cNom >= 0 ? (txt_(row[cApe]) + ' ' + txt_(row[cNom])).trim() : '';
     if (!u && !nombreArmado && !digits_(row[c.dni])) continue;
     var ing = c.ingreso >= 0 ? toDate_(row[c.ingreso], mdyIng) : null;
