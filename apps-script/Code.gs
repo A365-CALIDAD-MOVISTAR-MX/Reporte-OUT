@@ -184,7 +184,23 @@ function diagnostico() {
   Logger.log('Feedbacks por mes: ' + porMes(src.fb));
   // Dotación: encabezados, columnas detectadas y cruce con las evaluaciones (sin datos personales)
   var cuenta = function (arr, k) { var o = {}; arr.forEach(function (x) { o[x[k]] = (o[x[k]] || 0) + 1; }); return JSON.stringify(o); };
-  Logger.log('VERSION CRUCE DOTACION 2');
+  Logger.log('VERSION CRUCE DOTACION 3');
+  // Activos de la dotación frente a los evaluados del mes actual: ¿coincide el usuario? ¿coincide el nombre?
+  var mesAct = ymd_(new Date()).slice(0, 7);
+  var clave = function (n) { return norm_(n).replace(/[^a-z ]/g, ' ').split(' ').filter(String).sort().join(' '); };
+  var evaMes = src.eva.filter(function (e) { return e.mes === mesAct; });
+  var usrEva = {}, nomEva = {};
+  evaMes.forEach(function (e) { usrEva[e.usuario] = 1; nomEva[clave(e.agente)] = 1; });
+  var activos = src.dot.filter(function (d) { return d.estado === 'ACTIVO'; });
+  var linea = activos.map(function (d) {
+    return (d.usuario || '(sin usuario)') + ' usr:' + (usrEva[d.usuario] ? 'SI' : 'no') + ' nom:' + (d.nombre ? (nomEva[clave(d.nombre)] ? 'SI' : 'no') : 'vacío') +
+      ' cargo:' + (d.cargo || '-');
+  });
+  Logger.log('Activos en dotación: ' + activos.length + ' · evaluados en ' + mesAct + ' (usuario o nombre): ' +
+    activos.filter(function (d) { return usrEva[d.usuario] || nomEva[clave(d.nombre)]; }).length);
+  for (var li = 0; li < linea.length; li += 15) Logger.log(linea.slice(li, li + 15).join(' ; '));
+  var sinDot = {}; evaMes.forEach(function (e) { if (e.estado === 'Sin dotación') sinDot[e.usuario] = 1; });
+  Logger.log('Usuarios evaluados en ' + mesAct + ' sin dotación: ' + Object.keys(sinDot).sort().join(', '));
   Logger.log('Dotación leída: ' + src.dot.length + ' filas · con usuario: ' + src.dot.filter(function (d) { return d.usuario; }).length +
     ' · con nombre: ' + src.dot.filter(function (d) { return d.nombre; }).length + ' · ESTADO: ' + cuenta(src.dot, 'estado'));
   Logger.log('Estado en evaluaciones: ' + cuenta(src.eva, 'estado'));
