@@ -630,7 +630,7 @@ function excluirJefe_(sup, cfg) {
 // Unifica nombres de supervisor escritos distinto ("Jorge Cribillero" / "Jorge Cribilleros"):
 // misma clave sin acentos ni "s" final por palabra → se usa la forma más frecuente
 function unificarSup_(eva, fb, dot) {
-  var clave = function (n) { return norm_(n).split(' ').map(function (w) { return w.replace(/s$/, ''); }).join(' '); };
+  var clave = function (n) { return norm_(n).split(' ').map(function (w) { return w.replace(/s$/, '').replace(/(.)/g, '$1'); }).join(' '); };
   var cnt = {};
   [eva, fb, dot].forEach(function (arr) { arr.forEach(function (x) { if (x.supervisor) { var k = clave(x.supervisor); (cnt[k] = cnt[k] || {})[x.supervisor] = (cnt[k][x.supervisor] || 0) + 1; } }); });
   var canon = {};
