@@ -173,6 +173,25 @@ section+section{margin-top:34px}
 .kc span{display:block;font-size:13px;font-weight:700;margin-top:3px}
 .kc small.s{display:block;font-size:11.5px;color:var(--ink-2);margin-top:1px}
 
+/* ---------- Indicadores del cliente ---------- */
+.icards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.ic{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.ic::before{content:"";position:absolute;left:0;top:0;right:0;height:4px;background:var(--ink-3)}
+.ic.ok::before{background:var(--ok);box-shadow:0 0 calc(var(--glow)*14px) 1px var(--ok)}.ic.mid::before{background:var(--mid)}.ic.bad::before{background:var(--bad);box-shadow:0 0 calc(var(--glow)*14px) 1px var(--bad)}
+.ic-h{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11.5px;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.05em}
+.ic-v{font-family:var(--font-c);font-weight:700;font-size:44px;line-height:1;margin-top:8px;font-variant-numeric:tabular-nums}
+.ic-v small{font-size:.5em;color:var(--ink-2)}
+.ic.ok .ic-v{color:var(--ok-t)}.ic.mid .ic-v{color:var(--mid-t)}.ic.bad .ic-v{color:var(--bad-t)}
+.ic-bar{position:relative;height:8px;border-radius:4px;background:var(--panel-2);margin:10px 0 8px;box-shadow:inset 0 0 0 1px var(--border-soft)}
+.ic-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--ink-3)}
+.ic.ok .ic-bar i{background:var(--ok)}.ic.mid .ic-bar i{background:var(--mid)}.ic.bad .ic-bar i{background:var(--bad)}
+.ic-bar b{position:absolute;top:-4px;bottom:-4px;width:0;border-left:2px solid var(--ink)}
+.ic-m{font-size:12.5px;color:var(--ink-2)}.ic-m b{color:var(--ink)}.ic-m b.up{color:var(--ok-t)}.ic-m b.down{color:var(--bad-t)}
+.ic .dl{margin-top:3px}
+.ic-s{font-size:11.5px;color:var(--ink-3);margin-top:6px;line-height:1.35}
+@media (max-width:1250px){.icards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.icards{grid-template-columns:1fr 1fr}.ic-v{font-size:34px}}
+
 /* ---------- Tarjetas KPI (resumen, feedback, monitoreo) ---------- */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:16px}
 .kpi{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px 13px}
@@ -633,7 +652,7 @@ function render(){
   document.getElementById('sideInfo').innerHTML='<b>'+a.length+'</b>evaluaciones de '+D.eva.length+'<br><span style="color:var(--ink-3)">'+fb.length+' feedbacks · '+(F.mes?esc(mesLabel(F.mes)):'todos los meses')+'</span>';
   document.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){TAB=b.dataset.t;render();};});
   document.querySelector('.fbar').style.display=TAB==='monitoreo'?'none':'';
-  var V={resumen:function(){return sResumen(a,fb)+sSupervisor(a)+sCausa(a);},pauta:function(){return sItems(a);},errores:function(){return sErrores(a);},
+  var V={resumen:function(){return sCliente(a)+sResumen(a,fb)+sSupervisor(a)+sCausa(a);},pauta:function(){return sItems(a);},errores:function(){return sErrores(a);},
     agentes:function(){return sAgentes(a);},feedback:function(){return sFeedback(fb);},
     monitoreo:function(){return '<section id="monitoreo"><h2>Seguimiento de monitoreos</h2><p class="lead">Evaluaciones realizadas frente a las programadas por agente, productividad de los monitores y evaluaciones con errores sin feedback. Sección restringida; usa el mes del filtro general.</p><div id="monBody"></div></section>';},metodo:sMetodo};
   document.getElementById('main').innerHTML=V[TAB]();
@@ -643,6 +662,39 @@ function render(){
   postCharts(a,fb);
   activarOrden(document.getElementById('main'));
   if(TAB==='agentes'){var th=document.querySelectorAll('#tAg th')[4];if(th)th.onclick();}
+}
+
+/* --- Indicadores del cliente (metas acordadas) --- */
+var IND = [
+  ['nota', 'Nota de calidad', 'Promedio de la nota ponderada', function(){ return META; }],
+  ['pec', 'PEC Global', 'Promedio UF · NEG · CUM, −10 pts si falla ENC', function(){ return METAS.pec; }],
+  ['uf', 'PEC UF', 'Usuario final: sin errores que afectan al cliente', function(){ return METAS.uf; }],
+  ['ecNeg', 'PEC NEG', 'Negocio: sin errores que afectan al negocio', function(){ return METAS.neg; }],
+  ['ecCum', 'PEC CUM', 'Cumplimiento: referidos y tipificación', function(){ return METAS.cum; }],
+  ['enc', 'ENC', 'Fluidez, despedida y clima cordial', function(){ return METAS.enc; }]
+];
+function indPill(v, meta){ return v==null?'<span class="muted">–</span>':'<span class="pill '+cls(v,meta)+'">'+pct(v)+'</span>'; }
+function sCliente(a){
+  var r=resumen(a), pr=P?P.r:{};
+  var cards=IND.map(function(d){
+    var v=r[d[0]], meta=d[3](), m=meta/100, c=cls(v,meta);
+    var brecha=v==null?null:(v-m)*100;
+    var w=v==null?0:Math.max(0,Math.min(100,v*100));
+    return '<div class="ic '+c+'">'+
+      '<div class="ic-h"><span>'+d[1]+'</span>'+(v==null?'':'<span class="tag '+c+'">'+(v>=m?'En meta':'Bajo meta')+'</span>')+'</div>'+
+      '<div class="ic-v">'+(v==null?'–':(v*100).toFixed(1)+'<small>%</small>')+'</div>'+
+      '<div class="ic-bar"><i style="width:'+w+'%"></i><b style="left:'+meta+'%" title="Meta '+meta+'%"></b></div>'+
+      '<div class="ic-m">Meta <b>'+meta+'%</b>'+(brecha==null?'':' · brecha <b class="'+(brecha>=0?'up':'down')+'">'+(brecha>=0?'+':'−')+Math.abs(brecha).toFixed(1)+' pp</b>')+'</div>'+
+      dPct(v,pr[d[0]])+
+      '<div class="ic-s">'+d[2]+'</div></div>';
+  }).join('');
+  var fila=function(nombre,x,cl){return '<tr'+(cl?' class="'+cl+'"':'')+'><td class="l">'+esc(nombre)+'</td><td>'+x.n+'</td>'+IND.map(function(d){return '<td data-v="'+x[d[0]]+'">'+indPill(x[d[0]],d[3]())+'</td>';}).join('')+'</tr>';};
+  var head=['# Evas'].concat(IND.map(function(d){return d[1]+'<br><span class="muted" style="font-weight:600">meta '+d[3]()+'%</span>';}));
+  var gs=groupBy(a,function(e){return e.mes+'|'+e.sem;}), gp=groupBy(a,function(e){return e.supervisor||'(sin supervisor)';});
+  return '<section><div class="sec-head"><div><h2>Indicadores del cliente</h2><p class="lead">Resultado del mes frente a la meta de cada indicador'+(P?' y variación frente a '+esc(P.label):'')+'. Verde: en meta · amarillo: hasta 15 pts debajo · rojo: más de 15 pts debajo.</p></div></div>'+
+    '<div class="icards">'+cards+'</div>'+
+    '<div class="grid2 mt"><div><h3>Por semana</h3>'+tabla(['Semana'].concat(head),Object.keys(gs).sort().map(function(k){return fila(semLabel(k),resumen(gs[k]));}),fila('Total',r,'tot'))+'</div>'+
+    '<div><h3>Por supervisor</h3>'+tabla(['Supervisor'].concat(head),Object.keys(gp).sort().map(function(k){return fila(k,resumen(gp[k]));}),fila('Total',r,'tot'))+'</div></div></section>';
 }
 
 /* --- Piezas visuales del resumen --- */
