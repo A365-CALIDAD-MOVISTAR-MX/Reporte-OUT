@@ -212,9 +212,14 @@ function loadSources_() {
   var porDni = {}; dot.forEach(function (d) { if (d.dni) porDni[d.dni] = d; });
   // Estado del agente según la dotación: Activo / Inactivo / Sin dotación (para el filtro del dashboard)
   var porUsr = {}, porNom = {};
-  dot.forEach(function (d) { if (d.usuario) porUsr[d.usuario] = d; if (d.nombre) porNom[norm_(d.nombre)] = d; });
+  var clave = function (n) { return norm_(n).replace(/[^a-z ]/g, ' ').split(' ').filter(String).sort().join(' '); };
+  // las cuentas de Sprinklr se reasignan: ante duplicados gana la fila ACTIVO
+  dot.forEach(function (d) {
+    if (d.usuario && (!porUsr[d.usuario] || d.estado === 'ACTIVO')) porUsr[d.usuario] = d;
+    if (d.nombre && (!porNom[clave(d.nombre)] || d.estado === 'ACTIVO')) porNom[clave(d.nombre)] = d;
+  });
   var estado = function (d) { return !d ? 'Sin dotación' : d.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'; };
-  eva.forEach(function (e) { e.estado = estado(porUsr[e.usuario] || porNom[norm_(e.agente)]); });
+  eva.forEach(function (e) { e.estado = estado(porNom[clave(e.agente)] || porUsr[e.usuario]); });
   fb.forEach(function (f) {
     var e = porDn[f.dn], d = porDni[f.dni];
     f.agente = (d && d.nombre) || (e && e.agente) || f.dni;
@@ -531,16 +536,26 @@ function parseDotacion_(rows) {
     ingreso: colIdx_(head, ['fecha_ingreso', 'fecha ingreso', 'f ingreso']),
     baja: colIdx_(head, ['fecha_baja', 'fecha baja', 'f baja'])
   };
+  // Usuario de Sprinklr: si el encabezado no lo dice, la columna cuyos valores parecen "...@sprinklr..."
+  var esSpr = function (ci) { var n = 0; for (var r = 1; r < Math.min(rows.length, 60); r++) if (/@sprinklr/i.test(String(rows[r][ci] || ''))) n++; return n; };
+  if (c.usuario < 0 || esSpr(c.usuario) === 0) {
+    var mejor = -1, max = 0;
+    for (var ci = 0; ci < head.length; ci++) { var k = esSpr(ci); if (k > max) { max = k; mejor = ci; } }
+    if (mejor >= 0) c.usuario = mejor;
+  }
+  // Nombre: si hay columnas separadas de apellidos y nombres, se arma "Apellidos Nombres"
+  var cApe = head.indexOf('apellidos'), cNom = head.indexOf('nombres');
   var out = [];
   var mdyIng = colMdy_(rows, c.ingreso), mdyBaja = colMdy_(rows, c.baja);
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
-    var u = norm_(row[c.usuario]);
-    if (!u) continue;
+    var u = c.usuario >= 0 ? norm_(row[c.usuario]) : '';
+    var nombreArmado = cApe >= 0 && cNom >= 0 ? (txt_(row[cApe]) + ' ' + txt_(row[cNom])).trim() : '';
+    if (!u && !nombreArmado && !digits_(row[c.dni])) continue;
     var ing = c.ingreso >= 0 ? toDate_(row[c.ingreso], mdyIng) : null;
     var baja = c.baja >= 0 ? toDate_(row[c.baja], mdyBaja) : null;
     out.push({
-      usuario: u, dni: digits_(row[c.dni]), nombre: txt_(row[c.nombre]).replace(/\s+/g, ' '),
+      usuario: u, dni: digits_(row[c.dni]), nombre: (nombreArmado || txt_(row[c.nombre])).replace(/\s+/g, ' '),
       cargo: str_(row[c.cargo]), campana: txt_(row[c.camp]), estado: str_(row[c.estado]).toUpperCase(),
       supervisor: txt_(row[c.jefe]),
       ingreso: ing ? ymd_(ing) : '', baja: baja ? ymd_(baja) : ''
@@ -564,6 +579,7 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
   eva.forEach(function (e) { var n = txt_(e.agente); if (e.usuario && n && !nombreEva[e.usuario]) nombreEva[e.usuario] = n; });
   dot.forEach(function (d) {
     if (!/ejecutivo|asesor|agente/i.test(d.cargo) && d.cargo) return;
+    if (!d.usuario || (agentes[d.usuario] && d.estado !== 'ACTIVO')) return;
     agentes[d.usuario] = { usuario: d.usuario, dni: d.dni, nombre: d.nombre || nombreEva[d.usuario] || '', campana: d.campana, supervisor: d.supervisor, estado: d.estado, ingreso: d.ingreso, baja: d.baja };
   });
   eva.forEach(function (e) {
