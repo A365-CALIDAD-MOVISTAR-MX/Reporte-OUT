@@ -495,7 +495,7 @@ function rgba(hex,a){hex=hex.replace('#','');if(hex.length===3)hex=hex.replace(/
 function siPct(a,k,re){var v=a.filter(function(e){return e[k];});return v.length?v.filter(function(e){return re.test(String(e[k]).trim());}).length/v.length:null;}
 var RE_PLAN=/^s[ií]/i, RE_TIPI=/^(correct|cumple|s[ií])/i;
 var F = { mes:'', sem:'', campana:'', supervisor:'', evaluador:'', tipo:'', tipoEval:'', estado:'Activo' };
-var FM = { supervisor:'', campana:'', solo:'' };
+var FM = { supervisor:'', campana:'', solo:'', estado:'Activo' };
 try { document.documentElement.dataset.theme = localStorage.getItem('mv_theme') || 'dark'; } catch (e) { document.documentElement.dataset.theme = 'dark'; }
 
 /* ===== Utilidades ===== */
@@ -1080,7 +1080,7 @@ function pintarMon(){
     var i=document.getElementById('pass');document.getElementById('btnPass').onclick=function(){cargarMon(i.value);};i.onkeydown=function(e){if(e.key==='Enter')cargarMon(i.value);};return;
   }
   var mes=F.mes||mesActual();
-  var ag=MON.agentes.filter(function(x){return x.mes===mes&&(!FM.supervisor||x.supervisor===FM.supervisor)&&(!FM.campana||x.campana===FM.campana);});
+  var ag=MON.agentes.filter(function(x){return x.mes===mes&&(!FM.supervisor||x.supervisor===FM.supervisor)&&(!FM.campana||x.campana===FM.campana)&&(!FM.estado||!x.estado||x.estado===FM.estado);});
   var tot={prog:0,real:0,v:0,nv:0},rows=[];
   ag.forEach(function(x){
     var prog=0,real=0,fbn=0,v=0,nv=0;
@@ -1095,13 +1095,13 @@ function pintarMon(){
   var rowsD=dias.map(function(d){var c=d.fbs/MON.metaDiaria;return '<tr><td class="l" data-v="'+d.fecha+'">'+fdate(d.fecha)+'</td><td class="l">'+['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][new Date(d.fecha+'T12:00:00').getDay()]+'</td><td>S'+d.sem+'</td><td class="l">'+esc(d.monitor)+'</td><td>'+d.evas+'</td><td>'+d.fbs+'</td><td>'+MON.metaDiaria+'</td><td data-v="'+c+'">'+pill(c)+'</td></tr>';});
   var rowsS=[];[1,2,3,4,5].forEach(function(s){mons.forEach(function(mn){var x=dias.filter(function(d){return d.sem===s&&d.monitor===mn;});if(!x.length)return;var dd=x.length,e=sum(x.map(function(d){return d.evas;})),f=sum(x.map(function(d){return d.fbs;})),obj=dd*MON.metaDiaria;
     rowsS.push('<tr><td class="l">Semana '+s+'</td><td class="l">'+esc(mn)+'</td><td>'+dd+'</td><td>'+obj+'</td><td>'+e+'</td><td>'+f+'</td><td>'+pill(f/obj)+'</td><td>'+pill(e/obj)+'</td></tr>');});});
-  var pend=MON.pendientes.filter(function(p){return p.mes===mes&&(!FM.supervisor||p.supervisor===FM.supervisor)&&(!FM.campana||p.campana===FM.campana);}).sort(function(a,b){return a.fecha<b.fecha?-1:1;});
+  var pend=MON.pendientes.filter(function(p){return p.mes===mes&&(!FM.supervisor||p.supervisor===FM.supervisor)&&(!FM.campana||p.campana===FM.campana)&&(!FM.estado||!p.estado||p.estado===FM.estado);}).sort(function(a,b){return a.fecha<b.fecha?-1:1;});
   var hoy=new Date();
   var rowsP=pend.map(function(p){var dd=Math.floor((hoy-new Date(p.fecha+'T00:00:00'))/864e5);return '<tr><td class="l" data-v="'+p.fecha+'">'+fdate(p.fecha)+'</td><td>'+dd+'</td><td class="l">'+esc(p.agente)+'</td><td class="l">'+esc(p.supervisor)+'</td><td class="l">'+esc(p.campana)+'</td><td class="l">'+esc(p.evaluador)+'</td><td>'+esc(p.dn)+'</td><td>'+esc(p.caso)+'</td><td>'+pill(p.nota)+'</td></tr>';});
   var sel=function(k,lab,opts){return '<label class="f">'+lab+'<select data-fm="'+k+'"><option value="">Todos</option>'+opts.map(function(v){return '<option value="'+esc(v)+'"'+(FM[k]===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select></label>';};
   var cump=tot.prog?Math.min(1,tot.real/tot.prog):null;
   var kpi=function(l,v,c){return '<div class="kpi" style="--kc:var('+(c||'--blue')+')"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';};
-  box.innerHTML='<div class="panel"><div class="filters" style="padding:0">'+sel('supervisor','Supervisor',uniq(MON.agentes.map(function(x){return x.supervisor;})))+sel('campana','Campaña',uniq(MON.agentes.map(function(x){return x.campana;})))+
+  box.innerHTML='<div class="panel"><div class="filters" style="padding:0">'+sel('supervisor','Supervisor',uniq(MON.agentes.map(function(x){return x.supervisor;})))+sel('estado','Estado agente',['Activo','Inactivo','Sin dotación'])+sel('campana','Campaña',uniq(MON.agentes.map(function(x){return x.campana;})))+
     '<label class="f">Mostrar<select data-fm="solo"><option value="">Todos</option><option value="1"'+(FM.solo?' selected':'')+'>Solo con pendientes</option></select></label><span class="count">Mes: <b>'+esc(mesLabel(mes))+'</b> (filtro general)</span><button type="button" class="ghost" id="btnLock">🔒 Bloquear</button></div>'+
     (MON.usaDotacion?'':'<p class="note miss">No se encontró la hoja de Dotación: los agentes se toman de las evaluaciones.</p>')+'</div>'+
     '<div class="kpis">'+kpi('Evas programadas',tot.prog,'--blue')+kpi('Evas realizadas',tot.real,'--teal')+kpi('Pendientes',Math.max(0,tot.prog-tot.real),'--bad')+kpi('Cumplimiento',pct(cump),'--'+(cls(cump)||'blue'))+kpi('Feedback pendiente',pend.length,pend.length?'--mid':'--ok')+'</div>'+

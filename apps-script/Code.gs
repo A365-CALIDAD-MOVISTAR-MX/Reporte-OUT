@@ -605,6 +605,10 @@ function parseDotacion_(rows) {
 
 /* ---------------- Seguimiento de monitoreos ---------------- */
 
+// Un nombre de agente válido: texto corto, sin frases (descarta respuestas corridas de columna)
+function nombreOk_(n) { n = txt_(n); return n && n.length <= 70 && !/[:"“”?¿!]/.test(n) && n.split(' ').length <= 8 ? n : ''; }
+function estadoTxt_(e) { e = String(e || '').toUpperCase(); return e === 'ACTIVO' ? 'Activo' : !e || e === 'NO EN DOTACIÓN' ? 'Sin dotación' : 'Inactivo'; }
+
 function buildMonitoreo_(eva, fb, dot, cfg) {
   var hoy = ymd_(new Date());
   var meses = {};
@@ -615,15 +619,15 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
   var agentes = {};
   // nombre según las evaluaciones, por si la dotación no lo trae
   var nombreEva = {};
-  eva.forEach(function (e) { var n = txt_(e.agente); if (e.usuario && n && !nombreEva[e.usuario]) nombreEva[e.usuario] = n; });
+  eva.forEach(function (e) { var n = nombreOk_(e.agente); if (e.usuario && n && !nombreEva[e.usuario]) nombreEva[e.usuario] = n; });
   dot.forEach(function (d) {
     if (!/ejecutivo|asesor|agente/i.test(d.cargo) && d.cargo) return;
     if (!d.usuario || (agentes[d.usuario] && d.estado !== 'ACTIVO')) return;
-    agentes[d.usuario] = { usuario: d.usuario, dni: d.dni, nombre: d.nombre || nombreEva[d.usuario] || '', campana: d.campana, supervisor: d.supervisor, estado: d.estado, ingreso: d.ingreso, baja: d.baja };
+    agentes[d.usuario] = { usuario: d.usuario, dni: d.dni, nombre: nombreOk_(d.nombre) || nombreEva[d.usuario] || '', campana: d.campana, supervisor: d.supervisor, estado: estadoTxt_(d.estado), ingreso: d.ingreso, baja: d.baja };
   });
   eva.forEach(function (e) {
     var k = e.usuario || norm_(e.agente);
-    if (!agentes[k]) agentes[k] = { usuario: k, dni: '', nombre: txt_(e.agente), campana: e.campana, supervisor: e.supervisor, estado: dot.length ? 'NO EN DOTACIÓN' : 'ACTIVO', ingreso: '', baja: '' };
+    if (!agentes[k]) agentes[k] = { usuario: k, dni: '', nombre: nombreEva[k] || nombreOk_(e.agente), campana: e.campana, supervisor: e.supervisor, estado: dot.length ? 'Sin dotación' : 'Activo', ingreso: '', baja: '' };
   });
 
   var fbPorDn = {};
@@ -638,6 +642,8 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
     if (e.fb) o.fb++;
   });
 
+  var evaMes = {};
+  eva.forEach(function (e) { evaMes[(e.usuario || norm_(e.agente)) + '|' + e.mes] = 1; });
   var filas = [];
   Object.keys(meses).sort().forEach(function (mes) {
     var y = +mes.slice(0, 4), m = +mes.slice(5, 7);
@@ -654,7 +660,9 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
         var activo = (!a.ingreso || a.ingreso <= fin) && (!a.baja || a.baja >= ini) && ini <= hoy;
         // la semana 5 (días 29-31) solo programa si el agente ya tiene evaluaciones ahí
         var o = cnt[k + '|' + mes + '|' + s] || { v: 0, nv: 0, fb: 0 };
-        var prog = activo && (s < 5 || o.v + o.nv > 0) && a.estado !== 'INACTIVO' ? cfg.EVAS_PROG_SEMANA : 0;
+        // Solo se programa a los activos; a los que no están en la dotación, solo si tienen evaluaciones ese mes
+        var programable = a.estado === 'Activo' || (a.estado === 'Sin dotación' && evaMes[k + '|' + mes]);
+        var prog = programable && activo && (s < 5 || o.v + o.nv > 0) ? cfg.EVAS_PROG_SEMANA : 0;
         if (a.baja && a.baja < ini) prog = 0;
         if (prog || o.v || o.nv) tieneAlgo = true;
         semanas.push({ prog: prog, v: o.v, nv: o.nv, fb: o.fb });
@@ -677,7 +685,7 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
 
   // Evaluaciones con "No Cumple" que aún no tienen feedback
   var pendientes = eva.filter(function (e) { return !e.fb && e.items.indexOf('N') >= 0 && txt_(e.agente); }).map(function (e) {
-    return { fecha: e.fecha, mes: e.mes, sem: e.sem, agente: e.agente, supervisor: e.supervisor, campana: e.campana, evaluador: e.evaluador, dn: e.dn, caso: e.caso, nota: e.nota };
+    return { fecha: e.fecha, mes: e.mes, sem: e.sem, agente: nombreOk_(e.agente) || e.agente, estado: e.estado, supervisor: e.supervisor, campana: e.campana, evaluador: e.evaluador, dn: e.dn, caso: e.caso, nota: e.nota };
   });
 
   return {
