@@ -691,7 +691,9 @@ function buildMonitoreo_(eva, fb, dot, cfg) {
         var fin = mes + '-' + ('0' + finDia).slice(-2);
         // Programación del mes completo: todas las semanas (incluida la 29-31) desde el día 1,
         // mientras el agente esté vigente (ingreso / baja) en esa semana
-        var activo = (!a.ingreso || a.ingreso <= fin) && (!a.baja || a.baja >= ini);
+        // Quien ingresa después del día 1 no tiene programadas ese mes (sí desde el mes siguiente);
+        // sus evaluaciones realizadas se siguen mostrando
+        var activo = (!a.ingreso || a.ingreso <= mes + '-01') && (!a.baja || a.baja >= ini);
         var o = cnt[k + '|' + mes + '|' + s] || { v: 0, nv: 0, fb: 0 };
         // Solo se programa a los activos; a los que no están en la dotación, solo si tienen evaluaciones ese mes
         var programable = a.estado === 'Activo' || (a.estado === 'Sin dotación' && evaMes[k + '|' + mes]);
