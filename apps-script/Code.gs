@@ -12,10 +12,11 @@ var CONFIG = {
   // Libro de las EVALUACIONES (pauta de calidad). Vacío = mismo libro de arriba
   EVA_SPREADSHEET_ID: '1N7-zHE_LZ9TDDRpurKC9RrzW0qCfaeYYwcAHgHwU9Nc',
   // Libro con la Dotación. Vacío = se busca en el libro de feedback y luego en el de la pauta
-  DOT_SPREADSHEET_ID: '',
+  DOT_SPREADSHEET_ID: '1N7-zHE_LZ9TDDRpurKC9RrzW0qCfaeYYwcAHgHwU9Nc',   // libro de la pauta
   // Pestaña exacta por su gid (el número después de "gid=" en el link). Vacío = se busca por nombre o encabezados
   EVA_GID: 643164169,   // pestaña "Forms" del libro de la pauta
   FB_GID: 1618586159,
+  DOT_GID: 1565779780,  // pestaña "Dotación" del libro de la pauta
   // Nombres de pestaña. Vacío = se detectan solas por sus encabezados
   EVA_SHEET: '',
   FB_SHEET: '',
@@ -212,7 +213,8 @@ function loadSources_() {
   var fbSh = findSheet_(main, CONFIG.FB_SHEET, CONFIG.FB_GID, function (h) { return h.indexOf('dni asesor') >= 0 && h.some(function (x) { return x.indexOf('actitud del agente') >= 0; }); });
   var dotSh = null;
   for (var b = 0; b < dotBooks.length && !dotSh; b++) {
-    dotSh = findSheet_(dotBooks[b], CONFIG.DOT_SHEET, null, null) ||
+    dotSh = (CONFIG.DOT_GID ? findSheet_(dotBooks[b], '', CONFIG.DOT_GID, null) : null) ||
+      findSheet_(dotBooks[b], CONFIG.DOT_SHEET, null, null) ||
       findSheet_(dotBooks[b], '', null, function (h) { return colIdx_(h, ['usuario_sprinklr', 'usuario sprinklr']) >= 0 && h.indexOf('estado') >= 0; });
   }
 
@@ -264,6 +266,7 @@ function findSheet_(book, name, gid, test) {
       for (var t0 = 0; t0 < top0.length; t0++) if (test(top0[t0].map(norm_))) return sheets[g];
     }
   }
+  if (!test) return null;
   for (var i = 0; i < sheets.length; i++) {
     var sh = sheets[i];
     if (sh.getLastRow() < 1 || sh.getLastColumn() < 1) continue;
