@@ -181,6 +181,23 @@ function diagnostico() {
   var porMes = function (arr) { var o = {}; arr.forEach(function (x) { o[x.mes] = (o[x.mes] || 0) + 1; }); return JSON.stringify(o); };
   Logger.log('Evaluaciones por mes: ' + porMes(src.eva));
   Logger.log('Feedbacks por mes: ' + porMes(src.fb));
+  // Dotación: encabezados, columnas detectadas y cruce con las evaluaciones (sin datos personales)
+  var cuenta = function (arr, k) { var o = {}; arr.forEach(function (x) { o[x[k]] = (o[x[k]] || 0) + 1; }); return JSON.stringify(o); };
+  Logger.log('VERSION CRUCE DOTACION 2');
+  Logger.log('Dotación leída: ' + src.dot.length + ' filas · con usuario: ' + src.dot.filter(function (d) { return d.usuario; }).length +
+    ' · con nombre: ' + src.dot.filter(function (d) { return d.nombre; }).length + ' · ESTADO: ' + cuenta(src.dot, 'estado'));
+  Logger.log('Estado en evaluaciones: ' + cuenta(src.eva, 'estado'));
+  var dotSh = null;
+  [CONFIG.SPREADSHEET_ID, CONFIG.EVA_SPREADSHEET_ID].filter(String).forEach(function (id) {
+    SpreadsheetApp.openById(id).getSheets().forEach(function (sh) { if (sh.getName() === src.hojas.dot) dotSh = sh; });
+  });
+  if (dotSh) {
+    var h = dotSh.getRange(1, 1, Math.min(10, dotSh.getLastRow()), dotSh.getLastColumn()).getValues();
+    var fh = 0; for (var i = 0; i < h.length; i++) if (h[i].map(norm_).indexOf('estado') >= 0) { fh = i; break; }
+    Logger.log('Encabezados de "' + dotSh.getName() + '" (fila ' + (fh + 1) + '): ' + h[fh].map(function (x) { return String(x).slice(0, 25); }).join(' | '));
+    var ejemplo = src.dot.filter(function (d) { return d.usuario; })[0];
+    if (ejemplo) Logger.log('Ejemplo usuario dotación: ' + ejemplo.usuario.replace(/^[^@]*/, '***') + ' · evaluación: ' + (src.eva[0] ? src.eva[0].usuario.replace(/^[^@]*/, '***') : '-'));
+  }
   if (src.eva.length) Logger.log('Primera evaluación: ' + src.eva[0].fecha + ' ' + src.eva[0].tipo + ' nota=' + src.eva[0].nota);
 }
 
