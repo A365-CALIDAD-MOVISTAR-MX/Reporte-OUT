@@ -743,7 +743,7 @@ function sResumen(a,fb){
   var ventas=a.filter(function(e){return e.tipo==='Venta';}).length;
   var porAg=groupBy(a,function(e){return e.agente;}),nAg=Object.keys(porAg).length;
   // Total de asesores activos según la dotación (con los filtros de supervisor y campaña)
-  var nAct=null;if(D.activos&&F.estado==='Activo'){var nc=function(x){return String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');};nAct=D.activos.filter(function(x){return (!F.supervisor||x.s===F.supervisor)&&(!F.campana||nc(x.c).indexOf(nc(F.campana))>=0);}).length;if(nAct<nAg)nAct=null;}
+  var nAct=null;if(D.activos&&(F.estado==='Activo'||!F.estado)){var nc=function(x){return String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');};nAct=D.activos.filter(function(x){return (!F.supervisor||x.s===F.supervisor)&&(!F.campana||nc(x.c).indexOf(nc(F.campana))>=0);}).length;if(!F.estado)nAct+=Object.keys(porAg).filter(function(k){return porAg[k][0].estado!=='Activo';}).length;if(nAct<nAg)nAct=null;}
   var bajo=Object.keys(porAg).filter(function(k){return avg(porAg[k].map(function(e){return e.nota;}))<m;}).length;
   var pBajo=null,pAg=null;if(P){var gp=groupBy(P.a,function(e){return e.agente;});pAg=Object.keys(gp).length;pBajo=Object.keys(gp).filter(function(k){return avg(gp[k].map(function(e){return e.nota;}))<m;}).length;}
   var sinFb=a.filter(function(e){return !e.fb&&e.items.indexOf('N')>=0;}).length;
@@ -767,7 +767,7 @@ function sResumen(a,fb){
     stage('--blue',a.length,'Evaluaciones','Venta <b>'+ventas+'</b> · No venta <b>'+(a.length-ventas)+'</b>'+(P?dNum(a.length,P.a.length):''))+
     stage('--green',bigPct(r.nota),'Nota de calidad'+est,'Meta <b>'+META+'%</b>'+dPct(r.nota,pr.nota),true)+
     stage('--teal',bigPct(r.pec),'PEC global'+(r.pec==null?'':' <span class="tag '+cls(r.pec,METAS.pec)+'">'+(r.pec>=METAS.pec/100?'En meta':'Bajo meta')+'</span>'),'Meta <b>'+METAS.pec+'%</b> · UF '+pct(r.uf,0)+' · NEG '+pct(r.ecNeg,0)+' · CUM '+pct(r.ecCum,0)+dPct(r.pec,pr.pec))+
-    stage(bajo?'--bad':'--ok',bajo+'<small>/'+(nAct||nAg)+'</small>','Agentes bajo meta','nota promedio &lt; '+META+'%'+(nAct?' · de '+nAct+' activos':'')+(P?dNum(bajo,pBajo):''));
+    stage(bajo?'--bad':'--ok',bajo+'<small>/'+(nAct||nAg)+'</small>','Agentes bajo meta','nota promedio &lt; '+META+'%'+(nAct?' · de '+nAct+(F.estado?' activos':' agentes'):'')+(P?dNum(bajo,pBajo):''));
   // Puntos por bloque
   var BL=BLOQ.filter(function(x){return b[x[0]].max>0;}),totMax=sum(BL.map(function(x){return b[x[0]].max;}))||1,totOk=sum(BL.map(function(x){return b[x[0]].ok;}));
   var cumK={neg:'neg',venta:'venta',cierre:'cierre',exp:'exp'};
@@ -777,7 +777,7 @@ function sResumen(a,fb){
   var kp=function(l,v,s,dl,c){return '<div class="kpi" style="--kc:var('+c+')"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(dl||'')+'<div class="s">'+(s||'&nbsp;')+'</div></div>';};
   var kpis='<div class="kpis">'+
     kp('ENC',pct(r.enc),'Fluidez, despedida y clima',dPct(r.enc,pr.enc),'--b-exp')+
-    kp('Agentes evaluados',nAg+(nAct?'<small style="font-size:.5em;color:var(--ink-3)"> / '+nAct+'</small>':''),nAct?'de '+nAct+' activos en la dotación':F.estado?'solo '+({Activo:'activos',Inactivo:'inactivos'}[F.estado]||F.estado.toLowerCase()):'con los filtros aplicados',P&&dNum(nAg,pAg),'--blue')+
+    kp('Agentes evaluados',nAg+(nAct?'<small style="font-size:.5em;color:var(--ink-3)"> / '+nAct+'</small>':''),nAct?(F.estado?'de '+nAct+' activos en la dotación':'de '+nAct+' agentes: activos de la dotación + inactivos evaluados'):F.estado?'solo '+({Activo:'activos',Inactivo:'inactivos'}[F.estado]||F.estado.toLowerCase()):'con los filtros aplicados',P&&dNum(nAg,pAg),'--blue')+
     kp('Feedbacks',fb.length,'registrados en el forms',P&&dNum(fb.length,P.fb.length),'--teal')+
     kp('Evas con feedback',pct(r.fb),sinFb+' con errores sin feedback',dPct(r.fb,pr.fb),sinFb?'--mid':'--ok')+
     kp('Ofrece plan mayor',pct(plan),'¿Ofrece un plan mayor al actual? = Sí',P&&dPct(plan,siPct(P.a,'planMayor',RE_PLAN)),'--'+(cls(plan)||'blue'))+
@@ -936,7 +936,7 @@ function postCharts(a,fb){
     stage('--blue',a.length,'Evaluaciones','Venta <b>'+ventas+'</b> · No venta <b>'+(a.length-ventas)+'</b>'+(P?dNum(a.length,P.a.length):''))+
     stage('--green',bigPct(r.nota),'Nota de calidad'+est,'Meta <b>'+META+'%</b>'+dPct(r.nota,pr.nota),true)+
     stage('--teal',bigPct(r.pec),'PEC global'+(r.pec==null?'':' <span class="tag '+cls(r.pec,METAS.pec)+'">'+(r.pec>=METAS.pec/100?'En meta':'Bajo meta')+'</span>'),'Meta <b>'+METAS.pec+'%</b> · UF '+pct(r.uf,0)+' · NEG '+pct(r.ecNeg,0)+' · CUM '+pct(r.ecCum,0)+dPct(r.pec,pr.pec))+
-    stage(bajo?'--bad':'--ok',bajo+'<small>/'+(nAct||nAg)+'</small>','Agentes bajo meta','nota promedio &lt; '+META+'%'+(nAct?' · de '+nAct+' activos':'')+(P?dNum(bajo,pBajo):''));
+    stage(bajo?'--bad':'--ok',bajo+'<small>/'+(nAct||nAg)+'</small>','Agentes bajo meta','nota promedio &lt; '+META+'%'+(nAct?' · de '+nAct+(F.estado?' activos':' agentes'):'')+(P?dNum(bajo,pBajo):''));
   // Puntos por bloque
   var BL=BLOQ.filter(function(x){return b[x[0]].max>0;}),totMax=sum(BL.map(function(x){return b[x[0]].max;}))||1,totOk=sum(BL.map(function(x){return b[x[0]].ok;}));
   var cumK={neg:'neg',venta:'venta',cierre:'cierre',exp:'exp'};
@@ -946,7 +946,7 @@ function postCharts(a,fb){
   var kp=function(l,v,s,dl,c){return '<div class="kpi" style="--kc:var('+c+')"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(dl||'')+'<div class="s">'+(s||'&nbsp;')+'</div></div>';};
   var kpis='<div class="kpis">'+
     kp('ENC',pct(r.enc),'Fluidez, despedida y clima',dPct(r.enc,pr.enc),'--b-exp')+
-    kp('Agentes evaluados',nAg+(nAct?'<small style="font-size:.5em;color:var(--ink-3)"> / '+nAct+'</small>':''),nAct?'de '+nAct+' activos en la dotación':F.estado?'solo '+({Activo:'activos',Inactivo:'inactivos'}[F.estado]||F.estado.toLowerCase()):'con los filtros aplicados',P&&dNum(nAg,pAg),'--blue')+
+    kp('Agentes evaluados',nAg+(nAct?'<small style="font-size:.5em;color:var(--ink-3)"> / '+nAct+'</small>':''),nAct?(F.estado?'de '+nAct+' activos en la dotación':'de '+nAct+' agentes: activos de la dotación + inactivos evaluados'):F.estado?'solo '+({Activo:'activos',Inactivo:'inactivos'}[F.estado]||F.estado.toLowerCase()):'con los filtros aplicados',P&&dNum(nAg,pAg),'--blue')+
     kp('Feedbacks',fb.length,'registrados en el forms',P&&dNum(fb.length,P.fb.length),'--teal')+
     kp('Evas con feedback',pct(r.fb),sinFb+' con errores sin feedback',dPct(r.fb,pr.fb),sinFb?'--mid':'--ok')+
     kp('Ofrece plan mayor',pct(plan),'¿Ofrece un plan mayor al actual? = Sí',P&&dPct(plan,siPct(P.a,'planMayor',RE_PLAN)),'--'+(cls(plan)||'blue'))+
