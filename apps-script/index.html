@@ -602,7 +602,7 @@ function render(){
   document.getElementById('sideInfo').innerHTML='<b>'+a.length+'</b>evaluaciones de '+D.eva.length+'<br><span style="color:var(--ink-3)">'+fb.length+' feedbacks · '+(F.mes?esc(mesLabel(F.mes)):'todos los meses')+'</span>';
   document.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){TAB=b.dataset.t;render();};});
   document.querySelector('.fbar').style.display=TAB==='monitoreo'?'none':'';
-  var V={resumen:function(){return sCliente(a)+sResumen(a,fb)+sSupervisor(a)+sCausa(a);},pauta:function(){return sItems(a);},errores:function(){return sErrores(a);},
+  var V={resumen:function(){return sResumen(a,fb)+sSupervisor(a)+sCausa(a);},pauta:function(){return sItems(a);},errores:function(){return sErrores(a);},
     agentes:function(){return sAgentes(a);},feedback:function(){return sFeedback(fb);},
     monitoreo:function(){return '<section id="monitoreo"><h2>Seguimiento de monitoreos</h2><p class="lead">Evaluaciones realizadas frente a las programadas por agente, productividad de los monitores y evaluaciones con errores sin feedback. Sección restringida; usa el mes del filtro general.</p><div id="monBody"></div></section>';},metodo:sMetodo};
   document.getElementById('main').innerHTML=V[TAB]();
@@ -736,6 +736,7 @@ function sResumen(a,fb){
       '<div class="stages">'+stages+'</div>'+
       '<div class="kcomp"><div class="kcomp-t"><span>Puntos promedio logrados por bloque</span><span>'+totOk.toFixed(1)+' de '+totMax.toFixed(1)+' pts · cada bloque ocupa el ancho de su peso</span></div>'+bar+leg+'</div></div>'+
     kpis+
+    '<div style="margin-top:34px">'+sCliente(a)+'</div>'+
     '<div class="panel mt"><div class="sec-head" style="margin-bottom:6px"><div><h3 style="margin:0">Evolución semanal</h3><p class="note" style="margin:2px 0 0">Barras: # de evaluaciones (eje derecho) · líneas: tendencia de nota, PEC y CUM por bloque (eje izquierdo).'+(P?' Incluye '+esc(P.label)+' como referencia.':'')+'</p></div></div>'+
       '<div class="chart tall"><canvas id="chEvo"></canvas></div></div>'+
     '<div class="g32 mt"><div class="panel"><h3>Nota vs PEC por supervisor</h3><p class="note">Cada fila une la nota de calidad con el PEC global; el largo de la barra es la brecha entre ambos.</p>'+
@@ -904,6 +905,7 @@ function postCharts(a,fb){
       '<div class="stages">'+stages+'</div>'+
       '<div class="kcomp"><div class="kcomp-t"><span>Puntos promedio logrados por bloque</span><span>'+totOk.toFixed(1)+' de '+totMax.toFixed(1)+' pts · cada bloque ocupa el ancho de su peso</span></div>'+bar+leg+'</div></div>'+
     kpis+
+    '<div style="margin-top:34px">'+sCliente(a)+'</div>'+
     '<div class="panel mt"><div class="sec-head" style="margin-bottom:6px"><div><h3 style="margin:0">Evolución semanal</h3><p class="note" style="margin:2px 0 0">Barras: # de evaluaciones (eje derecho) · líneas: tendencia de nota, PEC y CUM por bloque (eje izquierdo).'+(P?' Incluye '+esc(P.label)+' como referencia.':'')+'</p></div></div>'+
       '<div class="chart tall"><canvas id="chEvo"></canvas></div></div>'+
     '<div class="g32 mt"><div class="panel"><h3>Nota vs PEC por supervisor</h3><p class="note">Cada fila une la nota de calidad con el PEC global; el largo de la barra es la brecha entre ambos.</p>'+
