@@ -146,6 +146,7 @@ function getData() {
     eva: src.eva,
     fb: src.fb,
     hojas: src.hojas,
+    activos: activosDot_(src.dot, CONFIG),
     actualizado: Utilities.formatDate(new Date(), CONFIG.TZ, 'dd/MM/yyyy HH:mm')
   });
   if (out.length < 95000) cache.put('data_v1', out, CONFIG.CACHE_SEGUNDOS);
@@ -622,6 +623,16 @@ function parseDotacion_(rows) {
 // Un nombre de agente válido: texto corto, sin frases (descarta respuestas corridas de columna)
 function nombreOk_(n) { n = txt_(n); return n && n.length <= 70 && !/[:"“”?¿!]/.test(n) && n.split(' ').length <= 8 ? n : ''; }
 function estadoTxt_(e) { e = String(e || '').toUpperCase(); return e === 'ACTIVO' ? 'Activo' : !e || e === 'NO EN DOTACIÓN' ? 'Sin dotación' : 'Inactivo'; }
+
+// Asesores activos de la dotación (mismas exclusiones que Monitoreo). Solo supervisor y campaña: sin datos personales.
+function activosDot_(dot, cfg) {
+  return dot.filter(function (d) {
+    if (d.estado !== 'ACTIVO') return false;
+    if (d.cargo && !/ejecutivo|asesor|agente/i.test(d.cargo)) return false;
+    if (cfg.EXCLUIR_CARGOS && cfg.EXCLUIR_CARGOS.test(d.cargo)) return false;
+    return !excluirJefe_(d.supervisor, cfg);
+  }).map(function (d) { return { s: d.supervisor, c: d.campana }; });
+}
 
 function excluirJefe_(sup, cfg) {
   var n = norm_(sup);
